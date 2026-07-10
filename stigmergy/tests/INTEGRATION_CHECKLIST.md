@@ -125,6 +125,13 @@ Each item states what must be pinned, and which audit finding demands it.
 
 ## ops.memories (carried over)
 
+- [ ] **EMBEDDING_DIM vs schema cross-check at startup.** Verify the
+      code constant matches the declared VECTOR dimension (e.g. probe
+      via SHOW CREATE TABLE memories or a catalog query) alongside
+      verify_provider — both sides already enforce their own half; the
+      startup check catches the two halves drifting apart (audit round
+      3, P3.3 residue).
+
 - [ ] Rediscovery: recall touching N ORPHANED memories seals N
       REDISCOVERED events in the same transaction.
 - [ ] verify_provider refuses a mixed-provider database.

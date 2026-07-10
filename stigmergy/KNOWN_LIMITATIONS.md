@@ -1,0 +1,93 @@
+# STIGMERGY — Known limitations
+
+This file exists because `schema.sql` and `ARCHITECTURE.md` promise it
+by name. Every entry here is documented at its source too; this is the
+consolidated ledger. The organizing principle is the Failure philosophy:
+a limitation named is a decision; a limitation hidden is a bug waiting
+for a better moment.
+
+## Pinned embedding model (referenced from the schema header)
+
+`VECTOR(384)` is bound to exactly ONE model at a time. The dimension's
+single source of truth is `embeddings.base.EMBEDDING_DIM = 384`; the
+providers are:
+
+- `all-MiniLM-L6-v2` (`embeddings/minilm.py`) — semantic, used for the demo.
+- `deterministic-sha256-v1` (`embeddings/deterministic.py`) — NON-semantic
+  (`is_semantic = False`), development plumbing only. No relevance or
+  convergence claim may be derived from its distances, and code that
+  tries is violating a declared contract, not discovering a bug.
+
+Mixing vectors from different models in one column is semantically
+meaningless even when dimensions coincide. `verify_provider()` refuses a
+database populated by a different provider (the audit chain's
+`MEMORY_STORED.provider_id` is the source of truth). **Changing models
+is a migration event, not a config flip.** The startup cross-check
+between `EMBEDDING_DIM` and the declared column dimension is on
+`tests/INTEGRATION_CHECKLIST.md`, not yet implemented.
+
+## Accepted floating-point exceptions
+
+Exactly two, both outside every decision path:
+
+1. **Recruitment decay** — `signal_strength * exp(-decay_rate * Δt)`,
+   computed in SQL at READ time over immutable `created_at`, cast
+   `FLOAT8` end to end. It gates liveness; it never votes. Votes are
+   exact `Fraction` vigor; the verdict is a `Fraction` comparison.
+2. **Retry backoff jitter** (`run_in_transaction`) — wall-clock
+   scheduling for `time.sleep()`, deliberately random. Nothing is
+   decided, hashed, or verified over these values.
+
+## Trust model (out of scope, documented, not defended against)
+
+- Regional identity is assumed independent: an actor controlling
+  multiple logical regions could fabricate recruitment consensus.
+- No Byzantine consensus, no identity attestation between regions, no
+  adversarial node authentication, no real-time guarantees, no
+  distributed transactions across independent deployments.
+
+Consensus dilution (REC-002: foreign live signals enlarge the
+denominator) raises the cost of cherry-picking a target, but it is a
+robustness property, not a Sybil defense.
+
+## Deferred to Phase 2
+
+- **Region split/merge** — requires explicit CAS serialization on
+  `memory_regions.status`. Until then, `resolve_recruitment` checks
+  region status without `FOR SHARE`; the code comments mark where the
+  lock must appear when reshaping lands.
+- **GLOBAL-tier policy** — GLOBAL memories do not orphan (excluded by
+  design from the sweep) and a recruitment migration demotes them to
+  REGIONAL (visible in the `MEMORY_MIGRATED` payload as
+  `old_tier`/`new_tier`). Consolidation — how a memory earns and keeps
+  GLOBAL — is future work; today nothing promotes to GLOBAL.
+- **Confidence decay** — REINFORCED is currently permanent unless
+  re-reinforced past saturation (stored confidence saturates at exactly
+  1 after step 104 from c₀ = 1/2; documented and pinned by test). A
+  decay module moving stale REINFORCED → NEUTRAL would feed the orphan
+  sweep without ever letting it touch reinforced memories directly.
+
+## Operational costs, accepted and bounded
+
+- **Orphan-sweep staleness scan** — the `greatest(...)` expression has
+  no covering index; each sweep chunk scans the non-orphaned working
+  set. Accepted as a low-frequency cron cost rather than half-fixed
+  with a wrong index (`ops/orphans.py`).
+- **Audit chains grow forever** — nothing is pruned, in the spirit of
+  Invariant 8. Merkle snapshots chain linearly. There is no archival or
+  compaction story yet; at hackathon scale this is storage, not risk.
+- **Sweep events are bounded, not small** — `SIGNALS_EXPIRED` and
+  `MEMORIES_ORPHANED` payloads carry up to `limit` ids per event; the
+  cron loops chunks (`bounded_drain`) and reports `drained: false` when
+  budget runs out before backlog does.
+
+## Demo-only substitutes
+
+- `--local-resolver` POLLS pending signals as a stand-in for the
+  changefeed Lambda. The deployed system reacts
+  (`lambdas/changefeed_resolver.py`); the flag exists so the demo runs
+  on a laptop without AWS, and it is labeled as the substitute it is.
+- Lambda node identity is deployment configuration
+  (`STIGMERGY_NODE_ID` required): sandboxes are ephemeral, and
+  auto-derived per-sandbox identities would flood the ledger with
+  short-lived chains.
