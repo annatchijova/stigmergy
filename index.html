@@ -7,16 +7,18 @@
 <meta name="description" content="STIGMERGY: autonomous agents build a shared, verifiable episodic memory through CockroachDB. No coordinator, no LLM in the decision path. / Agentes autónomos construyen una memoria episódica compartida y verificable a través de CockroachDB.">
 <style>
   :root {
-    --coral: #F09384;
-    --coral-light: #F7B8AD;
-    --coral-deep: #C96A5B;
-    --coral-glow: rgba(240, 147, 132, 0.35);
-    --bg: #141011;
-    --bg-soft: #1C1516;
-    --bg-card: rgba(255, 255, 255, 0.035);
-    --line: rgba(240, 147, 132, 0.16);
-    --text: #F5ECE9;
-    --muted: #B9A7A2;
+    --coral: #8FAB8C;
+    --coral-light: #D7E6D3;
+    --coral-deep: #567253;
+    --lavender: #A88CAB;
+    --lavender-light: #E7D8E8;
+    --coral-glow: rgba(143, 171, 140, 0.36);
+    --bg: #101510;
+    --bg-soft: #182019;
+    --bg-card: rgba(255, 255, 255, 0.055);
+    --line: rgba(215, 230, 211, 0.17);
+    --text: #F5F7F2;
+    --muted: #BAC8B8;
     --mono: "SF Mono", "Fira Code", "JetBrains Mono", Consolas, monospace;
     --sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
   }
@@ -26,7 +28,7 @@
   html { scroll-behavior: smooth; }
 
   body {
-    background: var(--bg);
+    background: radial-gradient(circle at 88% 4%, rgba(168, 140, 171, .16), transparent 26rem), var(--bg);
     color: var(--text);
     font-family: var(--sans);
     line-height: 1.65;
@@ -40,7 +42,7 @@
   span.es, body.lang-es span.es { display: none; }
   body.lang-es span.es { display: inline; }
 
-  ::selection { background: var(--coral); color: #23100C; }
+  ::selection { background: var(--coral); color: #112010; }
 
   /* ---- Language toggle ---- */
   .lang-toggle {
@@ -54,7 +56,7 @@
     border-radius: 999px;
     overflow: hidden;
     backdrop-filter: blur(12px);
-    background: rgba(20, 16, 17, 0.55);
+    background: rgba(16, 21, 16, 0.72);
     box-shadow: 0 4px 24px rgba(0,0,0,0.35);
   }
   .lang-toggle button {
@@ -70,9 +72,92 @@
   }
   .lang-toggle button.active {
     background: var(--coral);
-    color: #2A1310;
+    color: #112010;
   }
   .lang-toggle button:not(.active):hover { color: var(--coral-light); }
+
+  /* ---- Jury navigation and evidence ---- */
+  .site-nav {
+    position: fixed;
+    z-index: 90;
+    top: 1.2rem;
+    left: 1.4rem;
+    display: flex;
+    align-items: center;
+    gap: .85rem;
+    padding: .45rem .65rem .45rem .85rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: rgba(16, 21, 16, .72);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 4px 24px rgba(0,0,0,.22);
+  }
+  .site-nav .nav-mark { color: var(--coral); font-size: 1rem; }
+  .site-nav a { color: var(--muted); text-decoration: none; font: 650 .73rem var(--sans); letter-spacing: .08em; text-transform: uppercase; }
+  .site-nav a:hover { color: var(--coral-light); }
+  .nav-divider { width: 1px; height: 14px; background: var(--line); }
+
+  .jury-strip { padding: 0 1.5rem; position: relative; z-index: 2; margin-top: -3.6rem; }
+  .jury-strip-inner {
+    max-width: 1060px; margin: 0 auto; padding: 1.05rem 1.25rem;
+    border: 1px solid rgba(215,230,211,.25); border-radius: 18px;
+    background: linear-gradient(100deg, rgba(143,171,140,.23), rgba(168,140,171,.2));
+    display: grid; grid-template-columns: 1.2fr repeat(3, auto); gap: 1rem; align-items: center;
+    box-shadow: 0 18px 50px rgba(0,0,0,.2);
+  }
+  .jury-strip-title { font-size: .9rem; color: var(--text); }
+  .jury-strip-title strong { color: var(--coral-light); }
+  .proof-chip { font: 650 .7rem var(--mono); color: var(--lavender-light); border: 1px solid rgba(231,216,232,.28); border-radius: 999px; padding: .35rem .6rem; white-space: nowrap; }
+
+  .judge-grid { display: grid; grid-template-columns: .95fr 1.35fr; gap: 1.4rem; margin-top: 2.6rem; align-items: stretch; }
+  .evidence-card, .memory-console { border: 1px solid var(--line); border-radius: 20px; background: var(--bg-card); overflow: hidden; }
+  .evidence-card { padding: 1.55rem; }
+  .evidence-card h3 { font-size: 1.08rem; margin-bottom: .5rem; }
+  .evidence-card > p { color: var(--muted); font-size: .9rem; }
+  .tool-evidence { list-style: none; margin-top: 1.25rem; display: grid; gap: .65rem; }
+  .tool-evidence li { display: grid; grid-template-columns: 26px 1fr; gap: .7rem; padding: .65rem 0; border-top: 1px solid rgba(255,255,255,.07); }
+  .tool-evidence b { display: block; font-size: .86rem; color: var(--text); }
+  .tool-evidence span { display: block; font-size: .79rem; line-height: 1.45; color: var(--muted); }
+  .tool-dot { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; background: rgba(143,171,140,.15); color: var(--coral); font: 700 .7rem var(--mono); }
+  .memory-console { display: grid; grid-template-rows: auto 1fr auto; min-height: 365px; }
+  .console-head { display: flex; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--line); background: rgba(143,171,140,.07); }
+  .console-title { font: 650 .75rem var(--mono); letter-spacing: .12em; color: var(--coral-light); text-transform: uppercase; }
+  .console-state { color: var(--lavender-light); font: 650 .7rem var(--mono); }
+  .console-body { padding: 1.35rem; display: grid; gap: 1rem; }
+  .memory-object { border: 1px solid rgba(215,230,211,.18); border-radius: 14px; padding: 1rem; background: rgba(0,0,0,.14); }
+  .memory-object .label { font: 650 .67rem var(--mono); letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+  .memory-object .memory-title { font-size: 1.02rem; color: var(--text); margin-top: .35rem; }
+  .region-path { display: grid; grid-template-columns: 1fr auto 1fr; gap: .5rem; align-items: center; }
+  .region { border: 1px solid var(--line); border-radius: 12px; padding: .75rem; color: var(--muted); font: .74rem var(--mono); }
+  .region.active { border-color: rgba(168,140,171,.72); color: var(--lavender-light); background: rgba(168,140,171,.14); }
+  .region.target { border-color: rgba(143,171,140,.72); color: var(--coral-light); background: rgba(143,171,140,.13); }
+  .arrow { color: var(--coral); font-size: 1.15rem; }
+  .event-log { font: .75rem/1.55 var(--mono); color: var(--muted); min-height: 3.2em; }
+  .event-log b { color: var(--coral-light); font-weight: 600; }
+  .console-foot { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem 1.25rem; border-top: 1px solid var(--line); }
+  .console-foot code { color: var(--lavender-light); font: .72rem var(--mono); }
+  .sim-button { border: 0; border-radius: 999px; background: var(--coral); color: #112010; padding: .54rem .9rem; cursor: pointer; font: 750 .72rem var(--sans); }
+  .sim-button:hover { background: var(--coral-light); }
+
+  .architecture-map { margin-top: 2.8rem; padding: 1.4rem; border: 1px solid var(--line); border-radius: 22px; background: linear-gradient(135deg, rgba(143,171,140,.1), rgba(168,140,171,.09)); }
+  .arch-flow { display: grid; grid-template-columns: 1fr 42px 1.25fr 42px 1fr; align-items: center; gap: .35rem; }
+  .arch-node { min-height: 145px; border: 1px solid rgba(215,230,211,.2); border-radius: 16px; padding: 1.1rem; background: rgba(13,20,13,.54); transition: transform .25s, border-color .25s; }
+  .arch-node:hover { transform: translateY(-3px); border-color: var(--coral); }
+  .arch-node .node-tag { color: var(--coral); font: 700 .65rem var(--mono); letter-spacing: .1em; }
+  .arch-node h3 { font-size: .98rem; margin: .4rem 0; }
+  .arch-node p { color: var(--muted); font-size: .8rem; line-height: 1.45; }
+  .arch-node.crdb { border-color: rgba(168,140,171,.45); background: rgba(168,140,171,.12); }
+  .arch-node.crdb .node-tag { color: var(--lavender-light); }
+  .arch-arrow { color: var(--coral); text-align: center; font: 700 1.45rem var(--mono); }
+  .arch-caption { margin-top: 1rem; font-size: .83rem; color: var(--muted); text-align: center; }
+
+  @media (max-width: 760px) {
+    .site-nav { padding: .5rem .7rem; } .site-nav a, .nav-divider { display: none; }
+    .jury-strip { margin-top: -1.5rem; } .jury-strip-inner { grid-template-columns: 1fr; gap: .55rem; }
+    .proof-chip { width: fit-content; }
+    .judge-grid { grid-template-columns: 1fr; }
+    .arch-flow { grid-template-columns: 1fr; } .arch-arrow { transform: rotate(90deg); height: 25px; }
+  }
 
   /* ---- Hero ---- */
   .hero {
@@ -89,20 +174,25 @@
     inset: 0;
     width: 100%;
     height: 100%;
-    z-index: -1;
+    z-index: 0;
+    opacity: .42;
+    pointer-events: none;
   }
   .hero::after {
     content: "";
     position: absolute;
     inset: 0;
-    z-index: -1;
-    background: radial-gradient(ellipse at center, transparent 30%, var(--bg) 95%);
+    z-index: 0;
+    background: radial-gradient(ellipse at center, transparent 48%, rgba(16,21,16,.35) 100%);
     pointer-events: none;
+    display: none;
   }
   .hero-inner {
+    position: relative;
+    z-index: 5;
     padding: 2rem 1.5rem;
     max-width: 900px;
-    animation: heroRise 1.2s cubic-bezier(.2,.7,.2,1) both;
+    animation: heroRise .65s cubic-bezier(.2,.7,.2,1) both;
   }
   @keyframes heroRise {
     from { opacity: 0; transform: translateY(28px); }
@@ -115,7 +205,7 @@
     text-transform: uppercase;
     color: var(--coral-light);
     border: 1px solid var(--line);
-    background: rgba(240,147,132,0.07);
+    background: rgba(143,171,140,0.12);
     border-radius: 999px;
     padding: 0.45rem 1.1rem;
     margin-bottom: 1.8rem;
@@ -125,7 +215,7 @@
     font-weight: 800;
     letter-spacing: 0.06em;
     line-height: 1;
-    background: linear-gradient(115deg, #FFEDE8 15%, var(--coral) 55%, var(--coral-deep) 90%);
+    background: linear-gradient(115deg, #F6FBF4 15%, var(--coral) 52%, var(--lavender) 95%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
@@ -161,8 +251,8 @@
   }
   .btn-primary {
     background: var(--coral);
-    color: #2A1310;
-    box-shadow: 0 0 0 rgba(240,147,132,0);
+    color: #112010;
+    box-shadow: 0 0 0 rgba(143,171,140,0);
   }
   .btn-primary:hover {
     transform: translateY(-2px);
@@ -172,9 +262,10 @@
     color: var(--coral-light);
     border: 1px solid var(--line);
   }
-  .btn-ghost:hover { background: rgba(240,147,132,0.08); transform: translateY(-2px); }
+  .btn-ghost:hover { background: rgba(168,140,171,0.15); transform: translateY(-2px); }
 
   .scroll-hint {
+    z-index: 5;
     position: absolute;
     bottom: 2rem;
     left: 50%;
@@ -235,7 +326,7 @@
     border: 1px solid var(--line);
     border-radius: 20px;
     padding: 2.2rem;
-    background: linear-gradient(160deg, rgba(240,147,132,0.09), rgba(240,147,132,0.02));
+    background: linear-gradient(145deg, rgba(143,171,140,0.18), rgba(168,140,171,0.08));
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
   }
   .term-card .word {
@@ -272,8 +363,8 @@
   }
   .step:hover {
     transform: translateY(-6px);
-    border-color: rgba(240,147,132,0.45);
-    box-shadow: 0 14px 40px rgba(0,0,0,0.35), 0 0 24px rgba(240,147,132,0.08);
+    border-color: rgba(168,140,171,0.55);
+    box-shadow: 0 14px 40px rgba(0,0,0,0.35), 0 0 24px rgba(143,171,140,0.15);
   }
   .step::before {
     counter-increment: step;
@@ -285,7 +376,7 @@
     border-radius: 8px;
     padding: 0.25rem 0.55rem;
     margin-bottom: 0.9rem;
-    background: rgba(240,147,132,0.08);
+    background: rgba(143,171,140,0.12);
   }
   .step h3 { font-size: 1.05rem; margin-bottom: 0.5rem; }
   .step p { font-size: 0.9rem; color: var(--muted); }
@@ -305,7 +396,7 @@
     padding: 1.4rem 1.4rem 1.3rem;
     transition: transform .3s, background .3s;
   }
-  .inv:hover { transform: translateY(-4px); background: rgba(240,147,132,0.05); }
+  .inv:hover { transform: translateY(-4px); background: rgba(168,140,171,0.12); }
   .inv .n {
     font: 700 0.75rem var(--mono);
     color: var(--coral);
@@ -324,16 +415,16 @@
     text-transform: uppercase;
     color: var(--coral);
     border-bottom: 1px solid var(--line);
-    background: rgba(240,147,132,0.05);
+    background: rgba(143,171,140,0.1);
   }
   td { border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.93rem; color: var(--muted); }
   tr:last-child td { border-bottom: none; }
-  tr:hover td { background: rgba(240,147,132,0.035); }
+  tr:hover td { background: rgba(168,140,171,0.09); }
   td code, p code, li code {
     font-family: var(--mono);
     font-size: 0.85em;
     color: var(--coral-light);
-    background: rgba(240,147,132,0.09);
+    background: rgba(143,171,140,0.13);
     padding: 0.15em 0.45em;
     border-radius: 6px;
   }
@@ -350,10 +441,10 @@
     border: 1px solid var(--line);
     border-radius: 18px;
     padding: 1.8rem 1.5rem;
-    background: linear-gradient(180deg, rgba(240,147,132,0.06), transparent 60%);
+    background: linear-gradient(180deg, rgba(168,140,171,0.16), transparent 60%);
     transition: transform .3s, border-color .3s;
   }
-  .pillar:hover { transform: translateY(-5px); border-color: rgba(240,147,132,0.4); }
+  .pillar:hover { transform: translateY(-5px); border-color: rgba(168,140,171,0.5); }
   .pillar .icon { font-size: 1.6rem; margin-bottom: 0.8rem; display: block; }
   .pillar h3 { font-size: 1.05rem; margin-bottom: 0.5rem; }
   .pillar p { font-size: 0.9rem; color: var(--muted); }
@@ -405,7 +496,7 @@
     margin-top: 2.4rem;
     border: 1px solid var(--line);
     border-radius: 16px;
-    background: #0F0C0D;
+    background: #0B100B;
     overflow-x: auto;
     box-shadow: 0 20px 60px rgba(0,0,0,0.4);
   }
@@ -417,15 +508,15 @@
   }
   .code-block .bar i {
     width: 11px; height: 11px; border-radius: 50%;
-    background: rgba(240,147,132,0.35);
+    background: rgba(168,140,171,0.45);
   }
   .code-block .bar i:first-child { background: var(--coral); }
   .code-block pre {
     padding: 1.4rem 1.5rem;
     font: 0.86rem/1.7 var(--mono);
-    color: #E8D8D3;
+    color: #E5EEE2;
   }
-  .code-block .c { color: #7E6B66; }
+  .code-block .c { color: #92A48F; }
   .code-block .k { color: var(--coral); }
 
   /* ---- Footer ---- */
@@ -453,6 +544,15 @@
 </style>
 </head>
 <body class="lang-en">
+
+<nav class="site-nav" aria-label="Primary navigation">
+  <span class="nav-mark">✦</span>
+  <a href="#jury"><span class="en">Jury brief</span><span class="es">Resumen</span></a>
+  <span class="nav-divider"></span>
+  <a href="#architecture"><span class="en">Architecture</span><span class="es">Arquitectura</span></a>
+  <span class="nav-divider"></span>
+  <a href="#run"><span class="en">Evidence</span><span class="es">Evidencia</span></a>
+</nav>
 
 <div class="lang-toggle" role="group" aria-label="Language / Idioma">
   <button id="btn-en" class="active" onclick="setLang('en')">EN</button>
@@ -484,6 +584,79 @@
     <span class="en">scroll</span><span class="es">desliza</span> ▾
   </div>
 </header>
+
+<div class="jury-strip" aria-label="Hackathon technology highlights">
+  <div class="jury-strip-inner">
+    <div class="jury-strip-title">
+      <span class="en"><strong>Built for judging:</strong> an agentic memory system where the database is the coordination surface.</span>
+      <span class="es"><strong>Creado para evaluación:</strong> un sistema de memoria agéntica donde la base de datos es la superficie de coordinación.</span>
+    </div>
+    <span class="proof-chip">CockroachDB · VECTOR</span>
+    <span class="proof-chip">AWS · LAMBDA</span>
+    <span class="proof-chip">AUDIT · MERKLE</span>
+  </div>
+</div>
+
+<!-- ============ JURY BRIEF ============ -->
+<section id="jury">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="kicker"><span class="en">Jury brief</span><span class="es">Resumen para el jurado</span></div>
+      <h2>
+        <span class="en">Memory is the system — not a feature bolted on later.</span>
+        <span class="es">La memoria es el sistema — no una función añadida al final.</span>
+      </h2>
+      <p class="lede">
+        <span class="en">STIGMERGY turns persistent memory into a shared environment: autonomous agents retrieve context, leave decaying recruitment traces, reach deterministic consensus, and commit a verifiable history.</span>
+        <span class="es">STIGMERGY convierte la memoria persistente en un entorno compartido: agentes autónomos recuperan contexto, dejan rastros de reclutamiento que decaen, alcanzan consenso determinista y confirman un historial verificable.</span>
+      </p>
+    </div>
+
+    <div class="judge-grid">
+      <article class="evidence-card reveal">
+        <h3><span class="en">Technology, made load-bearing</span><span class="es">Tecnología estructural, no decorativa</span></h3>
+        <p><span class="en">Each integration directly changes how the agent remembers, reacts, or can be trusted.</span><span class="es">Cada integración cambia directamente cómo el agente recuerda, reacciona o puede ser confiable.</span></p>
+        <ul class="tool-evidence">
+          <li>
+            <i class="tool-dot">01</i>
+            <div><b>Distributed Vector Indexing</b><span><span class="en"><code>VECTOR(384)</code> + prefix <code>region_id</code> keep semantic recall and regional search inside CockroachDB.</span><span class="es"><code>VECTOR(384)</code> + el prefijo <code>region_id</code> mantienen la recuperación semántica y la búsqueda regional dentro de CockroachDB.</span></span></div>
+          </li>
+          <li>
+            <i class="tool-dot">02</i>
+            <div><b>CockroachDB Changefeeds</b><span><span class="en">A recruitment write becomes a webhook event that triggers the reactive resolver — no polling in the deployed path.</span><span class="es">Una escritura de reclutamiento se vuelve un evento webhook que activa el resolvedor reactivo — sin sondeo en la ruta desplegada.</span></span></div>
+          </li>
+          <li>
+            <i class="tool-dot">03</i>
+            <div><b>AWS Lambda</b><span><span class="en">Two bounded workers: one resolves changefeed deliveries; another runs scheduled signal expiry and orphan sweeping.</span><span class="es">Dos workers acotados: uno resuelve entregas de changefeed; otro ejecuta expiración programada de señales y barrido de huérfanos.</span></span></div>
+          </li>
+        </ul>
+      </article>
+
+      <article class="memory-console reveal" aria-live="polite">
+        <div class="console-head">
+          <span class="console-title"><span class="en">Live decision trace</span><span class="es">Traza de decisión</span></span>
+          <span class="console-state" id="sim-state">READY</span>
+        </div>
+        <div class="console-body">
+          <div class="memory-object">
+            <div class="label"><span class="en">Memory under review</span><span class="es">Memoria bajo revisión</span></div>
+            <div class="memory-title"><span class="en">“Vector indexes make semantic recall fast at scale.”</span><span class="es">“Los índices vectoriales agilizan la recuperación semántica a escala.”</span></div>
+          </div>
+          <div class="region-path">
+            <div class="region active" id="from-region">cooking / current</div>
+            <div class="arrow">→</div>
+            <div class="region target" id="to-region">databases / resonant</div>
+          </div>
+          <div class="event-log" id="event-log"><span class="en">Waiting for a judge to replay the memory decision.</span><span class="es">Esperando que el jurado reproduzca la decisión de memoria.</span></div>
+        </div>
+        <div class="console-foot">
+          <code id="audit-hash">audit_hash: pending</code>
+          <button class="sim-button" type="button" id="sim-button"><span class="en">Replay decision</span><span class="es">Reproducir decisión</span></button>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
 
 <!-- ============ CONCEPT ============ -->
 <section id="concept">
@@ -692,7 +865,7 @@
 </section>
 
 <!-- ============ WHY COCKROACHDB ============ -->
-<section id="why">
+<section id="architecture">
   <div class="wrap">
     <div class="reveal">
       <div class="kicker"><span class="en">The substrate</span><span class="es">El sustrato</span></div>
@@ -726,6 +899,28 @@
           <span class="es">La localidad a nivel de fila da significado físico a "región" más allá de una clave foránea — mientras el esquema mantiene regiones lógicas de memoria y nodos físicos como conceptos estrictamente distintos.</span>
         </p>
       </div>
+    </div>
+    <div class="architecture-map reveal" role="img" aria-label="STIGMERGY architecture: autonomous agents write shared memory to CockroachDB; changefeeds trigger AWS Lambda; Lambdas write deterministic resolutions back to CockroachDB.">
+      <div class="arch-flow">
+        <div class="arch-node">
+          <div class="node-tag"><span class="en">AGENT LAYER</span><span class="es">CAPA DE AGENTES</span></div>
+          <h3><span class="en">Roam, recall, reinforce</span><span class="es">Explorar, recordar, reforzar</span></h3>
+          <p><span class="en">Independent agents read only shared state. No direct messages and no private source of truth.</span><span class="es">Agentes independientes leen solo estado compartido. Sin mensajes directos ni fuente de verdad privada.</span></p>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-node crdb">
+          <div class="node-tag">COCKROACHDB</div>
+          <h3><span class="en">The memory substrate</span><span class="es">El sustrato de memoria</span></h3>
+          <p><span class="en">Vectors, regional context, recruitment signals, transactional state, audit chains, and chained Merkle snapshots live together.</span><span class="es">Vectores, contexto regional, señales de reclutamiento, estado transaccional, cadenas de auditoría y snapshots Merkle encadenados viven juntos.</span></p>
+        </div>
+        <div class="arch-arrow">↔</div>
+        <div class="arch-node">
+          <div class="node-tag">AWS LAMBDA</div>
+          <h3><span class="en">Reactive + scheduled work</span><span class="es">Trabajo reactivo + programado</span></h3>
+          <p><span class="en">A changefeed resolver reacts to signals; a bounded sweeper expires stale state. Both write audited results back.</span><span class="es">Un resolvedor de changefeeds reacciona a señales; un sweeper acotado expira estado obsoleto. Ambos escriben resultados auditados.</span></p>
+        </div>
+      </div>
+      <p class="arch-caption"><span class="en">The important loop is closed: every agent action becomes durable, observable shared memory before another agent acts on it.</span><span class="es">El ciclo importante está cerrado: cada acción del agente se vuelve memoria compartida durable y observable antes de que otro agente actúe sobre ella.</span></p>
     </div>
   </div>
 </section>
@@ -827,8 +1022,64 @@ function setLang(lang) {
 (function () {
   var saved = null;
   try { saved = localStorage.getItem('stigmergy-lang'); } catch (e) {}
-  if (!saved && (navigator.language || '').toLowerCase().indexOf('es') === 0) saved = 'es';
   if (saved === 'es') setLang('es');
+})();
+
+/* ---------- Replayable memory decision ---------- */
+(function () {
+  var button = document.getElementById('sim-button');
+  var state = document.getElementById('sim-state');
+  var log = document.getElementById('event-log');
+  var hash = document.getElementById('audit-hash');
+  var from = document.getElementById('from-region');
+  var to = document.getElementById('to-region');
+  if (!button || !state || !log) return;
+
+  function isSpanish() { return document.body.classList.contains('lang-es'); }
+  function setText(el, en, es) { el.innerHTML = isSpanish() ? es : en; }
+  function wait(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+  function resetRegions() {
+    from.className = 'region active';
+    to.className = 'region target';
+    from.textContent = 'cooking / current';
+    to.textContent = 'databases / resonant';
+  }
+  async function replay() {
+    if (button.disabled) return;
+    button.disabled = true;
+    button.style.opacity = '.65';
+    resetRegions();
+    state.textContent = 'RECALL';
+    setText(log,
+      '1. Vector recall finds a stronger semantic neighborhood in <b>databases</b>.',
+      '1. La recuperación vectorial encuentra un vecindario semántico más fuerte en <b>databases</b>.');
+    await wait(900);
+    state.textContent = 'SIGNAL';
+    setText(log,
+      '2. A decaying recruitment signal is written to shared state — not sent to another agent.',
+      '2. Se escribe una señal de reclutamiento que decae en el estado compartido — no se envía a otro agente.');
+    await wait(1050);
+    state.textContent = 'CONSENSUS';
+    setText(log,
+      '3. Independent observations cross the exact weighted-consensus threshold. Cooldown passes.',
+      '3. Observaciones independientes superan el umbral exacto de consenso ponderado. El enfriamiento permite actuar.');
+    await wait(1100);
+    state.textContent = 'COMMIT + AUDIT';
+    from.className = 'region';
+    to.className = 'region target active';
+    from.textContent = isSpanish() ? 'cocina / anterior' : 'cooking / previous';
+    to.textContent = isSpanish() ? 'bases de datos / actual' : 'databases / current';
+    setText(log,
+      '4. Migration and audit event commit in one transaction. The node chain receives a new sealed link.',
+      '4. La migración y el evento de auditoría confirman en una transacción. La cadena del nodo recibe un nuevo enlace sellado.');
+    hash.textContent = 'audit_hash: 8f3a…c91e · merkle: verified';
+    await wait(1300);
+    state.textContent = 'VERIFIED';
+    button.disabled = false;
+    button.style.opacity = '1';
+    setText(button, 'Replay again', 'Reproducir de nuevo');
+  }
+  button.addEventListener('click', replay);
 })();
 
 /* ---------- Scroll reveal ---------- */
@@ -920,8 +1171,7 @@ function setLang(lang) {
   }
 
   function draw() {
-    ctx.fillStyle = '#141011';
-    ctx.fillRect(0, 0, W, H);
+    ctx.clearRect(0, 0, W, H);
 
     // pheromone field in coral
     for (var y = 0; y < gh; y++) {
@@ -929,14 +1179,14 @@ function setLang(lang) {
         var v = grid[y * gw + x];
         if (v > 0.06) {
           var t = Math.min(v / 2.2, 1);
-          ctx.fillStyle = 'rgba(240, 147, 132, ' + (t * 0.34).toFixed(3) + ')';
+          ctx.fillStyle = 'rgba(143, 171, 140, ' + (t * 0.36).toFixed(3) + ')';
           ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
         }
       }
     }
 
     // agents as bright motes
-    ctx.fillStyle = '#F7B8AD';
+    ctx.fillStyle = '#E7D8E8';
     for (var k = 0; k < agents.length; k++) {
       var ag = agents[k];
       ctx.beginPath();
