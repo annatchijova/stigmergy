@@ -180,6 +180,20 @@ CREATE TABLE recruitment_signals (
      OR (status IN ('ACCEPTED','REJECTED')
                               AND resolved_at IS NOT NULL AND resolved_by_region IS NOT NULL)
     ),
+    -- ONE LIVE VOTE PER REGION (anti-flood). Consensus counts each live
+    -- signal as a voter (quorum * count of live signals), so "half the
+    -- live field points HERE" must mean half the REGIONS, not half the
+    -- ROWS — otherwise a single region could fabricate consensus by
+    -- emitting many signals for one memory. This PARTIAL unique index
+    -- caps a region at one PENDING signal per memory; it is deliberately
+    -- partial on status='PENDING' so history is untouched (Invariant 8:
+    -- EXPIRED/ACCEPTED rows never collide, and a region may re-recruit a
+    -- memory once its previous signal has resolved or evaporated).
+    -- NOTE: this hardens self-flooding only. Binding origin_region to the
+    -- emitting node's identity — so an actor cannot emit under a region it
+    -- does not own — is deferred to the identity phase (KNOWN_LIMITATIONS).
+    UNIQUE INDEX one_live_signal_per_region (memory_id, origin_region)
+        WHERE status = 'PENDING',
     INDEX (status, expires_at),
     INDEX (memory_id)
 );

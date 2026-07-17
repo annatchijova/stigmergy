@@ -127,6 +127,11 @@ def emit_signal(
     All validation happens BEFORE the cursor is touched — boundaries
     reject, they don't let garbage travel to a CHECK constraint that
     reports the violation in the database's words instead of ours.
+
+    Idempotent per (memory_id, origin_region) while a signal is live: a
+    region gets ONE live vote per memory (REDTEAM F-2 anti-flood). A
+    second emission before the first resolves returns the existing signal
+    unchanged and seals no new event — no transition occurred.
     """
     if reason not in VALID_REASONS:
         raise ValueError(f"reason must be one of {VALID_REASONS}, got {reason!r}.")
@@ -160,6 +165,16 @@ def emit_signal(
     # in the database's words. Translate 23503 into OUR boundary error —
     # race-free (unlike a SELECT-then-INSERT pre-check) and zero extra
     # round trips. Same sqlstate-extraction pattern as chain.py's 23505.
+    #
+    # REDTEAM F-2 (anti-flood): the partial unique index
+    # one_live_signal_per_region caps a region at ONE live (PENDING) signal
+    # per memory, so the consensus denominator counts regions, not rows. A
+    # duplicate emission is therefore a BENIGN no-op, not an error: ON
+    # CONFLICT DO NOTHING makes it idempotent WITHOUT aborting the caller's
+    # transaction (a raised 23505 would poison the whole agent round). The
+    # existing live pheromone is returned unchanged, and — because no row
+    # was inserted, i.e. no state transition — no SIGNAL_EMITTED event is
+    # sealed (Invariant 3: an event marks a transition, and none occurred).
     try:
         cur.execute(
             """
@@ -167,6 +182,8 @@ def emit_signal(
                 (origin_region, memory_id, reason, vigor,
                  signal_strength, decay_rate, status, created_at, expires_at)
             VALUES (%s, %s, %s, %s, %s, %s, 'PENDING', %s, %s)
+            ON CONFLICT (memory_id, origin_region) WHERE status = 'PENDING'
+            DO NOTHING
             RETURNING id
             """,
             (origin_region, memory_id, reason, q_vigor,
@@ -184,9 +201,34 @@ def emit_signal(
                 "a row that is not there."
             ) from exc
         raise
-    signal_id = str(cur.fetchone()[0])
 
+    inserted = cur.fetchone()
+    if inserted is None:
+        # A live pheromone from this region for this memory already exists.
+        # Return it unchanged; emit is idempotent and no transition occurred.
+        cur.execute(
+            """
+            SELECT id, vigor, expires_at
+              FROM recruitment_signals
+             WHERE memory_id = %s AND origin_region = %s AND status = 'PENDING'
+            """,
+            (memory_id, origin_region),
+        )
+        existing = cur.fetchone()
+        if existing is None:
+            # The conflict fired but the row is gone: a serialization anomaly,
+            # not a state this code may paper over. Surface it (the caller's
+            # run_in_transaction rolls back; retry reads a settled world).
+            raise RuntimeError(
+                "emit_signal: ON CONFLICT fired but no PENDING signal found "
+                f"for memory {memory_id!r} / region {origin_region!r} — "
+                "concurrent resolution race; retry the transaction."
+            )
+        eid, evigor, eexpires = existing
+        return EmittedSignal(str(eid), str(memory_id), origin_region,
+                             evigor, eexpires)
 
+    signal_id = str(inserted[0])
     append_event(
         cur,
         node_id=node_id,
