@@ -50,6 +50,19 @@ Consensus dilution (REC-002: foreign live signals enlarge the
 denominator) raises the cost of cherry-picking a target, but it is a
 robustness property, not a Sybil defense.
 
+The bar is lower than "multiple regions", and honesty demands saying so
+(REDTEAM F-2). Consensus counts each live signal as one voter, so absent
+a per-region cap a SINGLE region could fabricate consensus by emitting
+many signals for one memory — and `emit_signal` takes `origin_region` as
+a parameter validated only for existence (a FK), not for ownership, so
+one actor can emit under any existing region's label. Two partial fixes:
+(1) the `one_live_signal_per_region` partial unique index now caps a
+region at one live signal per memory, so self-flooding a single region no
+longer works (the denominator counts regions, not rows); (2) binding
+`origin_region` to the emitting node's identity — the actual Sybil-shaped
+gap — remains deferred to the identity phase, documented here rather than
+defended against.
+
 ## Deferred to Phase 2
 
 - **Region split/merge** — requires explicit CAS serialization on

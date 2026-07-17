@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STIGMERGY — Coordination without a coordinator</title>
+<meta name="description" content="STIGMERGY: autonomous agents build a shared, verifiable episodic memory through CockroachDB. No coordinator, no LLM in the decision path. / Agentes autónomos construyen una memoria episódica compartida y verificable a través de CockroachDB.">
+<style>
+  :root {
+    --coral: #F09384;
+    --coral-light: #F7B8AD;
+    --coral-deep: #C96A5B;
+    --coral-glow: rgba(240, 147, 132, 0.35);
+    --bg: #141011;
+    --bg-soft: #1C1516;
+    --bg-card: rgba(255, 255, 255, 0.035);
+    --line: rgba(240, 147, 132, 0.16);
+    --text: #F5ECE9;
+    --muted: #B9A7A2;
+    --mono: "SF Mono", "Fira Code", "JetBrains Mono", Consolas, monospace;
+    --sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.65;
+    overflow-x: hidden;
+  }
+
+  /* ---- Language switching ---- */
+  .es { display: none; }
+  body.lang-es .es { display: revert; }
+  body.lang-es .en { display: none; }
+  span.es, body.lang-es span.es { display: none; }
+  body.lang-es span.es { display: inline; }
+
+  ::selection { background: var(--coral); color: #23100C; }
+
+  /* ---- Language toggle ---- */
+  .lang-toggle {
+    position: fixed;
+    top: 1.2rem;
+    right: 1.4rem;
+    z-index: 100;
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    overflow: hidden;
+    backdrop-filter: blur(12px);
+    background: rgba(20, 16, 17, 0.55);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.35);
+  }
+  .lang-toggle button {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font: 600 0.8rem var(--sans);
+    letter-spacing: 0.08em;
+    padding: 0.55rem 1.1rem;
+    cursor: pointer;
+    transition: color .25s, background .25s;
+  }
+  .lang-toggle button.active {
+    background: var(--coral);
+    color: #2A1310;
+  }
+  .lang-toggle button:not(.active):hover { color: var(--coral-light); }
+
+  /* ---- Hero ---- */
+  .hero {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    isolation: isolate;
+  }
+  #pheromones {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+  }
+  .hero::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: radial-gradient(ellipse at center, transparent 30%, var(--bg) 95%);
+    pointer-events: none;
+  }
+  .hero-inner {
+    padding: 2rem 1.5rem;
+    max-width: 900px;
+    animation: heroRise 1.2s cubic-bezier(.2,.7,.2,1) both;
+  }
+  @keyframes heroRise {
+    from { opacity: 0; transform: translateY(28px); }
+    to   { opacity: 1; transform: none; }
+  }
+  .hero .badge {
+    display: inline-block;
+    font: 600 0.72rem var(--mono);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--coral-light);
+    border: 1px solid var(--line);
+    background: rgba(240,147,132,0.07);
+    border-radius: 999px;
+    padding: 0.45rem 1.1rem;
+    margin-bottom: 1.8rem;
+  }
+  .hero h1 {
+    font-size: clamp(3.2rem, 11vw, 7.5rem);
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    line-height: 1;
+    background: linear-gradient(115deg, #FFEDE8 15%, var(--coral) 55%, var(--coral-deep) 90%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 40px var(--coral-glow));
+  }
+  .hero .tagline {
+    margin-top: 1.4rem;
+    font-size: clamp(1.1rem, 2.6vw, 1.55rem);
+    font-weight: 300;
+    color: var(--text);
+  }
+  .hero .tagline strong { color: var(--coral); font-weight: 600; }
+  .hero .sub {
+    margin: 1.1rem auto 0;
+    max-width: 620px;
+    color: var(--muted);
+    font-size: clamp(0.95rem, 1.8vw, 1.05rem);
+  }
+  .hero .cta-row {
+    margin-top: 2.6rem;
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .btn {
+    display: inline-block;
+    text-decoration: none;
+    font: 600 0.95rem var(--sans);
+    padding: 0.85rem 1.9rem;
+    border-radius: 999px;
+    transition: transform .25s, box-shadow .25s, background .25s;
+  }
+  .btn-primary {
+    background: var(--coral);
+    color: #2A1310;
+    box-shadow: 0 0 0 rgba(240,147,132,0);
+  }
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px var(--coral-glow);
+  }
+  .btn-ghost {
+    color: var(--coral-light);
+    border: 1px solid var(--line);
+  }
+  .btn-ghost:hover { background: rgba(240,147,132,0.08); transform: translateY(-2px); }
+
+  .scroll-hint {
+    position: absolute;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--muted);
+    font-size: 0.75rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    animation: bob 2.4s ease-in-out infinite;
+  }
+  @keyframes bob {
+    0%, 100% { transform: translate(-50%, 0); opacity: .55; }
+    50%      { transform: translate(-50%, 8px); opacity: 1; }
+  }
+
+  /* ---- Layout ---- */
+  section { padding: 6.5rem 1.5rem; position: relative; }
+  .wrap { max-width: 1060px; margin: 0 auto; }
+
+  .kicker {
+    font: 600 0.75rem var(--mono);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--coral);
+    margin-bottom: 0.9rem;
+  }
+  h2 {
+    font-size: clamp(1.9rem, 4.5vw, 2.8rem);
+    font-weight: 750;
+    letter-spacing: -0.015em;
+    line-height: 1.15;
+    margin-bottom: 1.4rem;
+  }
+  .lede { color: var(--muted); font-size: 1.12rem; max-width: 720px; }
+  .lede strong, p strong { color: var(--coral-light); font-weight: 600; }
+
+  /* ---- Reveal on scroll ---- */
+  .reveal {
+    opacity: 0;
+    transform: translateY(34px);
+    transition: opacity .8s cubic-bezier(.2,.7,.2,1), transform .8s cubic-bezier(.2,.7,.2,1);
+  }
+  .reveal.in { opacity: 1; transform: none; }
+
+  /* ---- Concept section ---- */
+  .concept-grid {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 3.5rem;
+    align-items: center;
+    margin-top: 2.5rem;
+  }
+  @media (max-width: 820px) { .concept-grid { grid-template-columns: 1fr; } }
+  .concept-grid p + p { margin-top: 1rem; }
+  .concept-grid p { color: var(--muted); }
+
+  .term-card {
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 2.2rem;
+    background: linear-gradient(160deg, rgba(240,147,132,0.09), rgba(240,147,132,0.02));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+  .term-card .word {
+    font-size: 1.7rem;
+    font-weight: 750;
+    color: var(--coral);
+  }
+  .term-card .ipa { font-family: var(--mono); color: var(--muted); font-size: .9rem; margin-left: .5rem; }
+  .term-card .etym {
+    margin-top: 0.8rem;
+    font-size: 0.92rem;
+    color: var(--muted);
+  }
+  .term-card .defn { margin-top: 1rem; color: var(--text); }
+  .term-card .etym em { color: var(--coral-light); font-style: normal; font-family: var(--mono); font-size: .85rem; }
+
+  /* ---- Flow / how it works ---- */
+  .flow {
+    margin-top: 3rem;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.1rem;
+    counter-reset: step;
+  }
+  @media (max-width: 980px) { .flow { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 540px) { .flow { grid-template-columns: 1fr; } }
+  .step {
+    position: relative;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--bg-card);
+    padding: 1.7rem 1.4rem 1.5rem;
+    transition: transform .3s, border-color .3s, box-shadow .3s;
+  }
+  .step:hover {
+    transform: translateY(-6px);
+    border-color: rgba(240,147,132,0.45);
+    box-shadow: 0 14px 40px rgba(0,0,0,0.35), 0 0 24px rgba(240,147,132,0.08);
+  }
+  .step::before {
+    counter-increment: step;
+    content: "0" counter(step);
+    font: 700 0.8rem var(--mono);
+    color: var(--coral);
+    display: inline-block;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.25rem 0.55rem;
+    margin-bottom: 0.9rem;
+    background: rgba(240,147,132,0.08);
+  }
+  .step h3 { font-size: 1.05rem; margin-bottom: 0.5rem; }
+  .step p { font-size: 0.9rem; color: var(--muted); }
+
+  /* ---- Invariants ---- */
+  .inv-grid {
+    margin-top: 3rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 1.1rem;
+  }
+  .inv {
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--coral);
+    border-radius: 14px;
+    background: var(--bg-card);
+    padding: 1.4rem 1.4rem 1.3rem;
+    transition: transform .3s, background .3s;
+  }
+  .inv:hover { transform: translateY(-4px); background: rgba(240,147,132,0.05); }
+  .inv .n {
+    font: 700 0.75rem var(--mono);
+    color: var(--coral);
+    letter-spacing: .1em;
+  }
+  .inv h3 { font-size: 1rem; margin: 0.4rem 0 0.35rem; }
+  .inv p { font-size: 0.88rem; color: var(--muted); }
+
+  /* ---- Components table ---- */
+  .table-scroll { overflow-x: auto; margin-top: 2.6rem; border: 1px solid var(--line); border-radius: 16px; }
+  table { width: 100%; border-collapse: collapse; min-width: 640px; }
+  th, td { text-align: left; padding: 1rem 1.3rem; }
+  th {
+    font: 600 0.72rem var(--mono);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--coral);
+    border-bottom: 1px solid var(--line);
+    background: rgba(240,147,132,0.05);
+  }
+  td { border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.93rem; color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(240,147,132,0.035); }
+  td code, p code, li code {
+    font-family: var(--mono);
+    font-size: 0.85em;
+    color: var(--coral-light);
+    background: rgba(240,147,132,0.09);
+    padding: 0.15em 0.45em;
+    border-radius: 6px;
+  }
+
+  /* ---- Why CRDB ---- */
+  .pillar-grid {
+    margin-top: 3rem;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.2rem;
+  }
+  @media (max-width: 880px) { .pillar-grid { grid-template-columns: 1fr; } }
+  .pillar {
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 1.8rem 1.5rem;
+    background: linear-gradient(180deg, rgba(240,147,132,0.06), transparent 60%);
+    transition: transform .3s, border-color .3s;
+  }
+  .pillar:hover { transform: translateY(-5px); border-color: rgba(240,147,132,0.4); }
+  .pillar .icon { font-size: 1.6rem; margin-bottom: 0.8rem; display: block; }
+  .pillar h3 { font-size: 1.05rem; margin-bottom: 0.5rem; }
+  .pillar p { font-size: 0.9rem; color: var(--muted); }
+
+  /* ---- Failure philosophy ---- */
+  .philosophy {
+    background: var(--bg-soft);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .creed {
+    margin-top: 2.6rem;
+    display: grid;
+    gap: 1rem;
+    max-width: 780px;
+  }
+  .creed .rule {
+    display: flex;
+    gap: 1.1rem;
+    align-items: baseline;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1.2rem 1.5rem;
+    background: var(--bg-card);
+    font-size: 1.02rem;
+  }
+  .creed .rule .mark { color: var(--coral); font-family: var(--mono); font-weight: 700; flex: none; }
+  .creed .final {
+    margin-top: 1.6rem;
+    font-size: clamp(1.15rem, 2.6vw, 1.45rem);
+    font-weight: 650;
+    color: var(--coral-light);
+    line-height: 1.5;
+  }
+
+  /* ---- Honesty / limitations ---- */
+  .honesty-list { margin-top: 2.2rem; display: grid; gap: 0.9rem; max-width: 820px; }
+  .honesty-list li {
+    list-style: none;
+    border-left: 2px solid var(--coral-deep);
+    padding: 0.35rem 0 0.35rem 1.2rem;
+    color: var(--muted);
+    font-size: 0.95rem;
+  }
+  .honesty-list li strong { color: var(--text); }
+
+  /* ---- Run it ---- */
+  .code-block {
+    margin-top: 2.4rem;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: #0F0C0D;
+    overflow-x: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  }
+  .code-block .bar {
+    display: flex;
+    gap: 0.45rem;
+    padding: 0.85rem 1.2rem;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .code-block .bar i {
+    width: 11px; height: 11px; border-radius: 50%;
+    background: rgba(240,147,132,0.35);
+  }
+  .code-block .bar i:first-child { background: var(--coral); }
+  .code-block pre {
+    padding: 1.4rem 1.5rem;
+    font: 0.86rem/1.7 var(--mono);
+    color: #E8D8D3;
+  }
+  .code-block .c { color: #7E6B66; }
+  .code-block .k { color: var(--coral); }
+
+  /* ---- Footer ---- */
+  footer {
+    border-top: 1px solid var(--line);
+    padding: 3.5rem 1.5rem 4rem;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  footer .logo {
+    font: 800 1.1rem var(--sans);
+    letter-spacing: 0.2em;
+    color: var(--coral);
+    margin-bottom: 0.8rem;
+  }
+  footer a { color: var(--coral-light); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal, .hero-inner { transition: none; animation: none; opacity: 1; transform: none; }
+    .scroll-hint { animation: none; }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body class="lang-en">
+
+<div class="lang-toggle" role="group" aria-label="Language / Idioma">
+  <button id="btn-en" class="active" onclick="setLang('en')">EN</button>
+  <button id="btn-es" onclick="setLang('es')">ES</button>
+</div>
+
+<!-- ============ HERO ============ -->
+<header class="hero">
+  <canvas id="pheromones" aria-hidden="true"></canvas>
+  <div class="hero-inner">
+    <div class="badge">CockroachDB × AWS · Build with Agentic Memory</div>
+    <h1>STIGMERGY</h1>
+    <p class="tagline">
+      <span class="en">Coordination <strong>without a coordinator</strong>. Verifiable <strong>without a central authority</strong>.</span>
+      <span class="es">Coordinación <strong>sin coordinador</strong>. Verificable <strong>sin autoridad central</strong>.</span>
+    </p>
+    <p class="sub">
+      <span class="en">Autonomous agents build and reinforce a shared episodic memory by interacting only through distributed state in CockroachDB — the way ants build trails: no messages, no leader, just traces in a shared world.</span>
+      <span class="es">Agentes autónomos construyen y refuerzan una memoria episódica compartida interactuando únicamente a través de estado distribuido en CockroachDB — como las hormigas construyen sus senderos: sin mensajes, sin líder, solo huellas en un mundo compartido.</span>
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#concept">
+        <span class="en">Discover how</span><span class="es">Descubre cómo</span>
+      </a>
+      <a class="btn btn-ghost" href="https://github.com/annatchijova/stigmergy" target="_blank" rel="noopener">GitHub →</a>
+    </div>
+  </div>
+  <div class="scroll-hint">
+    <span class="en">scroll</span><span class="es">desliza</span> ▾
+  </div>
+</header>
+
+<!-- ============ CONCEPT ============ -->
+<section id="concept">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="kicker"><span class="en">The idea</span><span class="es">La idea</span></div>
+      <h2>
+        <span class="en">Ants don't hold meetings.</span>
+        <span class="es">Las hormigas no hacen reuniones.</span>
+      </h2>
+    </div>
+    <div class="concept-grid">
+      <div class="reveal">
+        <p>
+          <span class="en">An ant that finds food doesn't tell the others. It leaves a <strong>pheromone trail</strong> in the environment. Other ants follow it, reinforce it, and the colony converges on the best path — while unused trails simply <strong>evaporate</strong>. The environment itself is the communication channel.</span>
+          <span class="es">Una hormiga que encuentra comida no se lo cuenta a las demás. Deja un <strong>rastro de feromonas</strong> en el entorno. Otras hormigas lo siguen, lo refuerzan, y la colonia converge en el mejor camino — mientras los rastros sin uso simplemente <strong>se evaporan</strong>. El propio entorno es el canal de comunicación.</span>
+        </p>
+        <p>
+          <span class="en">STIGMERGY applies exactly that principle to machine memory. Each agent reads shared state, reacts to it, and writes back. No agent commands another. No LLM makes any decision. Yet the system converges on a collective memory — and <strong>every single state change is cryptographically sealed</strong> into tamper-evident hash chains and a chained Merkle ledger.</span>
+          <span class="es">STIGMERGY aplica exactamente ese principio a la memoria de las máquinas. Cada agente lee el estado compartido, reacciona y escribe de vuelta. Ningún agente da órdenes a otro. Ningún LLM toma decisión alguna. Y aun así el sistema converge en una memoria colectiva — y <strong>cada cambio de estado queda sellado criptográficamente</strong> en cadenas de hash a prueba de manipulación y un libro mayor de Merkle encadenado.</span>
+        </p>
+        <p>
+          <span class="en">This is not a distributed cache in front of a vector store: CockroachDB's vector index, changefeeds and multi-region locality are <strong>load-bearing parts of the algorithm</strong>, not swappable infrastructure.</span>
+          <span class="es">Esto no es una caché distribuida delante de un almacén vectorial: el índice vectorial, los changefeeds y la localidad multi-región de CockroachDB son <strong>piezas estructurales del algoritmo</strong>, no infraestructura intercambiable.</span>
+        </p>
+      </div>
+      <div class="term-card reveal">
+        <div>
+          <span class="word"><span class="en">stigmergy</span><span class="es">estigmergia</span></span>
+          <span class="ipa">/ˈstɪɡ.mə.dʒi/</span>
+        </div>
+        <div class="etym">
+          <span class="en">From Greek <em>stigma</em> (mark) + <em>ergon</em> (work): coordination through traces left in the environment.</span>
+          <span class="es">Del griego <em>stigma</em> (marca) + <em>ergon</em> (trabajo): coordinación mediante huellas dejadas en el entorno.</span>
+        </div>
+        <div class="defn">
+          <span class="en">Agents communicate <strong>exclusively</strong> by writing and observing shared state. Signals decay like pheromones. Consensus emerges; nobody orchestrates it.</span>
+          <span class="es">Los agentes se comunican <strong>exclusivamente</strong> escribiendo y observando estado compartido. Las señales decaen como feromonas. El consenso emerge; nadie lo orquesta.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section id="how" style="background: var(--bg-soft); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="kicker"><span class="en">How it works</span><span class="es">Cómo funciona</span></div>
+      <h2>
+        <span class="en">The life of a memory</span>
+        <span class="es">La vida de un recuerdo</span>
+      </h2>
+      <p class="lede">
+        <span class="en">Memories live in themed regions inside a distributed vector index. Agents roam, recall, and reinforce — and when a memory sits in the wrong neighborhood, the colony quietly moves it home.</span>
+        <span class="es">Los recuerdos viven en regiones temáticas dentro de un índice vectorial distribuido. Los agentes deambulan, recuerdan y refuerzan — y cuando un recuerdo está en el vecindario equivocado, la colonia lo devuelve a casa sin que nadie lo ordene.</span>
+      </p>
+    </div>
+    <div class="flow">
+      <div class="step reveal">
+        <h3><span class="en">Recall &amp; reinforce</span><span class="es">Recordar y reforzar</span></h3>
+        <p>
+          <span class="en">An agent queries a region. Every recall reinforces what it touches — confidence grows by exact closed-form arithmetic, never by an LLM's opinion.</span>
+          <span class="es">Un agente consulta una región. Cada recuerdo recuperado se refuerza — la confianza crece con aritmética exacta de forma cerrada, nunca por la opinión de un LLM.</span>
+        </p>
+      </div>
+      <div class="step reveal">
+        <h3><span class="en">Signal</span><span class="es">Señalizar</span></h3>
+        <p>
+          <span class="en">If the density gradient says a memory sits far from its resonant neighborhood, the agent drops a <strong>recruitment signal</strong> — a pheromone that decays exponentially over time.</span>
+          <span class="es">Si el gradiente de densidad indica que un recuerdo está lejos de su vecindario resonante, el agente deja una <strong>señal de reclutamiento</strong> — una feromona que decae exponencialmente con el tiempo.</span>
+        </p>
+      </div>
+      <div class="step reveal">
+        <h3><span class="en">Consensus</span><span class="es">Consenso</span></h3>
+        <p>
+          <span class="en">Other agents observe the signal and vote with exact <code>Fraction</code> arithmetic. Weighted consensus — never a single acceptance — decides the migration, under an anti-oscillation cooldown.</span>
+          <span class="es">Otros agentes observan la señal y votan con aritmética exacta de <code>Fraction</code>. Un consenso ponderado — nunca una aceptación aislada — decide la migración, bajo un periodo de enfriamiento anti-oscilación.</span>
+        </p>
+      </div>
+      <div class="step reveal">
+        <h3><span class="en">Seal &amp; verify</span><span class="es">Sellar y verificar</span></h3>
+        <p>
+          <span class="en">The migration and its audit event commit in <strong>one transaction</strong>. Per-node hash chains roll up into a chained Merkle ledger — verifiable end to end, with no central authority.</span>
+          <span class="es">La migración y su evento de auditoría se confirman en <strong>una sola transacción</strong>. Las cadenas de hash por nodo se consolidan en un libro mayor de Merkle encadenado — verificable de punta a punta, sin autoridad central.</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ INVARIANTS ============ -->
+<section id="invariants">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="kicker"><span class="en">The rules</span><span class="es">Las reglas</span></div>
+      <h2>
+        <span class="en">Eight invariants, non-negotiable</span>
+        <span class="es">Ocho invariantes, no negociables</span>
+      </h2>
+      <p class="lede">
+        <span class="en">These rules exist to survive contact with future optimizations. Violating one requires an explicit architecture decision — never a quiet patch.</span>
+        <span class="es">Estas reglas existen para sobrevivir al contacto con futuras optimizaciones. Violar una exige una decisión de arquitectura explícita — nunca un parche silencioso.</span>
+      </p>
+    </div>
+    <div class="inv-grid">
+      <div class="inv reveal">
+        <div class="n">INV-1</div>
+        <h3><span class="en">Shared state decides</span><span class="es">El estado compartido decide</span></h3>
+        <p><span class="en">No agent holds private truth. Every action reacts to what is read from CockroachDB — never to local caches or direct messages.</span><span class="es">Ningún agente posee una verdad privada. Toda acción reacciona a lo que se lee de CockroachDB — nunca a cachés locales ni mensajes directos.</span></p>
+      </div>
+      <div class="inv reveal">
+        <div class="n">INV-2</div>
+        <h3><span class="en">No LLM in the decision path</span><span class="es">Ningún LLM en el camino de decisión</span></h3>
+        <p><span class="en">An LLM may narrate a dashboard. It may never decide whether a memory reinforces, migrates or merges. Decisions are deterministic <code>Fraction</code> arithmetic.</span><span class="es">Un LLM puede narrar un panel. Jamás puede decidir si un recuerdo se refuerza, migra o se fusiona. Las decisiones son aritmética determinista con <code>Fraction</code>.</span></p>
+      </div>
+      <div class="inv reveal">
+        <div class="n">INV-3</div>
+        <h3><span class="en">No unaudited transition</span><span class="es">Ninguna transición sin auditar</span></h3>
+        <p><span class="en">Not "should be audited" — <strong>cannot exist unaudited</strong>. State change and audit event share one transaction; if the audit fails, the change is rejected.</span><span class="es">No es "debería auditarse" — <strong>no puede existir sin auditar</strong>. Cambio de estado y evento de auditoría comparten una transacción; si la auditoría falla, el cambio se rechaza.</span></p>
+      </div>
+      <div class="inv reveal">
+        <div class="n">INV-4</div>
+        <h3><span class="en">Regions are alive</span><span class="es">Las regiones están vivas</span></h3>
+        <p><span class="en">Regions carry generation and lineage so every split, merge and migration can be reconstructed. No region permanently owns its memories.</span><span class="es">Las regiones llevan generación y linaje para reconstruir cada división, fusión y migración. Ninguna región es dueña permanente de sus recuerdos.</span></p>
+      </div>
+      <div class="inv reveal">
+        <div class="n">INV-5</div>
+        <h3><span class="en">Global order is undefined — on purpose</span><span class="es">El orden global es indefinido — a propósito</span></h3>
+        <p><span class="en">Each node keeps its own hash chain; integrity across nodes comes from a chained Merkle ledger, never a global sequence number. A property, not a limitation.</span><span class="es">Cada nodo mantiene su propia cadena de hash; la integridad entre nodos proviene de un libro Merkle encadenado, nunca de un número de secuencia global. Es una propiedad, no una limitación.</span></p>
+      </div>
+      <div class="inv reveal">
+        <div class="n">INV-6</div>
+        <h3><span class="en">Cooldown against oscillation</span><span class="es">Enfriamiento contra la oscilación</span></h3>
+        <p><span class="en">A memory never migrates twice within its cooldown window — preventing A→C→A→C ping-pong under noisy signals.</span><span class="es">Un recuerdo nunca migra dos veces dentro de su ventana de enfriamiento — evitando el ping-pong A→C→A→C bajo señales ruidosas.</span></p>
+      </div>
+      <div class="inv reveal">
+        <div class="n">INV-7</div>
+        <h3><span class="en">Pheromones evaporate</span><span class="es">Las feromonas se evaporan</span></h3>
+        <p><span class="en">Recruitment signals decay exponentially and are never permanently binding. Late arrivals see a weak signal with diminished influence.</span><span class="es">Las señales de reclutamiento decaen exponencialmente y nunca son vinculantes para siempre. Quien llega tarde ve una señal débil con influencia menguada.</span></p>
+      </div>
+      <div class="inv reveal">
+        <div class="n">INV-8</div>
+        <h3><span class="en">Nothing is ever deleted</span><span class="es">Nada se borra jamás</span></h3>
+        <p><span class="en"><code>FORGOTTEN</code> and <code>ORPHANED</code> are states, not deletions. Rediscovery is always possible — and is itself an audited event.</span><span class="es"><code>FORGOTTEN</code> y <code>ORPHANED</code> son estados, no borrados. El redescubrimiento siempre es posible — y es, en sí mismo, un evento auditado.</span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ COMPONENTS ============ -->
+<section id="components" style="background: var(--bg-soft); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="kicker"><span class="en">Anatomy</span><span class="es">Anatomía</span></div>
+      <h2>
+        <span class="en">What lives in the database</span>
+        <span class="es">Qué vive en la base de datos</span>
+      </h2>
+      <p class="lede">
+        <span class="en">The schema is the real spec — most invariants are constraints, not conventions.</span>
+        <span class="es">El esquema es la especificación real — la mayoría de los invariantes son restricciones, no convenciones.</span>
+      </p>
+    </div>
+    <div class="table-scroll reveal">
+      <table>
+        <thead>
+          <tr>
+            <th><span class="en">Component</span><span class="es">Componente</span></th>
+            <th><span class="en">Role</span><span class="es">Rol</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>memories</code></td>
+            <td><span class="en">Episodic memory store. State (reinforced / neutral / forgotten) and tier (short-term / regional / global / orphaned) are independent axes.</span><span class="es">Almacén de memoria episódica. Estado (reforzado / neutral / olvidado) y nivel (corto plazo / regional / global / huérfano) son ejes independientes.</span></td>
+          </tr>
+          <tr>
+            <td><code>memory_regions</code></td>
+            <td><span class="en">Living memory regions, prefix-partitioned in the vector index, carrying full lineage.</span><span class="es">Regiones de memoria vivas, particionadas por prefijo en el índice vectorial, con linaje completo.</span></td>
+          </tr>
+          <tr>
+            <td><code>cell_links</code></td>
+            <td><span class="en">Association strength between memories — resonant or inhibitory.</span><span class="es">Fuerza de asociación entre recuerdos — resonante o inhibitoria.</span></td>
+          </tr>
+          <tr>
+            <td><code>recruitment_signals</code></td>
+            <td><span class="en">The stigmergic protocol itself: write-only signals other agents observe. Decaying state — never a message bus.</span><span class="es">El protocolo estigmérgico en sí: señales de solo escritura que otros agentes observan. Estado que decae — nunca un bus de mensajes.</span></td>
+          </tr>
+          <tr>
+            <td><code>agent_search_state</code></td>
+            <td><span class="en">Per-agent roaming/dwelling controller, driven by hysteresis over resonance density — not by agent-local confidence.</span><span class="es">Controlador de exploración/permanencia por agente, guiado por histéresis sobre la densidad de resonancia — no por confianza local del agente.</span></td>
+          </tr>
+          <tr>
+            <td><code>audit_chain</code></td>
+            <td><span class="en">Per-node, tamper-evident hash chain of every state-changing event.</span><span class="es">Cadena de hash por nodo, a prueba de manipulación, de cada evento que cambia el estado.</span></td>
+          </tr>
+          <tr>
+            <td><code>merkle_snapshots</code></td>
+            <td><span class="en">Chained Merkle roots over all nodes' chain heads. A ledger of ledgers.</span><span class="es">Raíces de Merkle encadenadas sobre las cabezas de todas las cadenas. Un libro mayor de libros mayores.</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ WHY COCKROACHDB ============ -->
+<section id="why">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="kicker"><span class="en">The substrate</span><span class="es">El sustrato</span></div>
+      <h2>
+        <span class="en">Why CockroachDB is load-bearing</span>
+        <span class="es">Por qué CockroachDB es estructural</span>
+      </h2>
+    </div>
+    <div class="pillar-grid">
+      <div class="pillar reveal">
+        <span class="icon">🧭</span>
+        <h3><span class="en">Vector index with prefix columns</span><span class="es">Índice vectorial con columnas prefijo</span></h3>
+        <p>
+          <span class="en">Partitioning by <code>region_id</code> makes dwelling (in-region search) cheap and roaming (cross-region) expensive <strong>by construction</strong>. The biological metaphor and the query planner's real cost model coincide.</span>
+          <span class="es">Particionar por <code>region_id</code> hace que permanecer (buscar en la región) sea barato y deambular (entre regiones) caro <strong>por construcción</strong>. La metáfora biológica y el modelo de costes real del planificador coinciden.</span>
+        </p>
+      </div>
+      <div class="pillar reveal">
+        <span class="icon">⚡</span>
+        <h3>Changefeeds → AWS Lambda</h3>
+        <p>
+          <span class="en">Changefeeds — not polling — drive the reactive layer: CockroachDB → webhook → Lambda → write-back. The database is a consensus substrate, never a message bus. A second, cron-driven Lambda sweeps expired signals and stale memories in bounded chunks.</span>
+          <span class="es">Los changefeeds — no el sondeo — impulsan la capa reactiva: CockroachDB → webhook → Lambda → escritura de vuelta. La base de datos es un sustrato de consenso, nunca un bus de mensajes. Una segunda Lambda, con cron, barre señales expiradas y recuerdos obsoletos en lotes acotados.</span>
+        </p>
+      </div>
+      <div class="pillar reveal">
+        <span class="icon">🌍</span>
+        <h3><span class="en">Multi-region locality</span><span class="es">Localidad multi-región</span></h3>
+        <p>
+          <span class="en">Row-level locality gives physical meaning to "region" beyond a foreign key — while the schema keeps logical memory regions and physical nodes strictly distinct concepts.</span>
+          <span class="es">La localidad a nivel de fila da significado físico a "región" más allá de una clave foránea — mientras el esquema mantiene regiones lógicas de memoria y nodos físicos como conceptos estrictamente distintos.</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FAILURE PHILOSOPHY ============ -->
+<section class="philosophy" id="philosophy">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="kicker"><span class="en">Failure philosophy</span><span class="es">Filosofía del fallo</span></div>
+      <h2>
+        <span class="en">Explicit degradation over hidden recovery</span>
+        <span class="es">Degradación explícita antes que recuperación oculta</span>
+      </h2>
+    </div>
+    <div class="creed reveal">
+      <div class="rule"><span class="mark">01</span><span><span class="en">If consensus cannot be established, the system <strong>preserves uncertainty</strong>.</span><span class="es">Si el consenso no puede establecerse, el sistema <strong>preserva la incertidumbre</strong>.</span></span></div>
+      <div class="rule"><span class="mark">02</span><span><span class="en">If migration cannot be completed, the memory <strong>remains in place</strong>.</span><span class="es">Si la migración no puede completarse, el recuerdo <strong>permanece donde está</strong>.</span></span></div>
+      <div class="rule"><span class="mark">03</span><span><span class="en">If the audit cannot be written, the state transition <strong>is rejected</strong>.</span><span class="es">Si la auditoría no puede escribirse, la transición de estado <strong>se rechaza</strong>.</span></span></div>
+      <p class="final">
+        <span class="en">The system never fabricates certainty in order to preserve availability.</span>
+        <span class="es">El sistema nunca fabrica certeza para preservar la disponibilidad.</span>
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ HONESTY ============ -->
+<section id="honesty">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="kicker"><span class="en">Honest by design</span><span class="es">Honesto por diseño</span></div>
+      <h2>
+        <span class="en">Limitations, named out loud</span>
+        <span class="es">Limitaciones, dichas en voz alta</span>
+      </h2>
+      <p class="lede">
+        <span class="en">"A limitation named is a decision; a limitation hidden is a bug waiting for a better moment." Every one of these is documented in <code>KNOWN_LIMITATIONS.md</code>.</span>
+        <span class="es">"Una limitación nombrada es una decisión; una limitación oculta es un bug esperando un mejor momento." Cada una está documentada en <code>KNOWN_LIMITATIONS.md</code>.</span>
+      </p>
+    </div>
+    <ul class="honesty-list reveal">
+      <li><span class="en"><strong>Pinned embedding model.</strong> The vector column is bound to exactly one model; changing models is a migration event, not a config flip.</span><span class="es"><strong>Modelo de embeddings fijado.</strong> La columna vectorial está ligada a exactamente un modelo; cambiarlo es un evento de migración, no un interruptor de configuración.</span></li>
+      <li><span class="en"><strong>Exactly two float exceptions</strong> — signal decay (a liveness gate, never a vote) and retry jitter. Everything that decides is exact <code>Fraction</code> arithmetic.</span><span class="es"><strong>Exactamente dos excepciones de coma flotante</strong> — el decaimiento de señales (una compuerta de vida, nunca un voto) y el jitter de reintentos. Todo lo que decide es aritmética exacta con <code>Fraction</code>.</span></li>
+      <li><span class="en"><strong>Sybil attacks are out of scope.</strong> Regional identity is assumed independent — documented, not defended against.</span><span class="es"><strong>Los ataques Sybil quedan fuera de alcance.</strong> La identidad regional se asume independiente — documentado, no defendido.</span></li>
+      <li><span class="en"><strong>Phase 2 deferred:</strong> region split/merge behind CAS, GLOBAL-tier promotion policy, and confidence decay.</span><span class="es"><strong>Diferido a Fase 2:</strong> división/fusión de regiones tras CAS, política de promoción al nivel GLOBAL y decaimiento de confianza.</span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ RUN IT ============ -->
+<section id="run" style="background: var(--bg-soft); border-top: 1px solid var(--line);">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="kicker"><span class="en">Try it</span><span class="es">Pruébalo</span></div>
+      <h2>
+        <span class="en">Watch the colony fix its own memory</span>
+        <span class="es">Mira a la colonia arreglar su propia memoria</span>
+      </h2>
+      <p class="lede">
+        <span class="en">The demo seeds three themed regions plus six <strong>deliberately misplaced memories</strong>. Agents recall, reinforce, signal and migrate them home — then the report verifies every hash chain and the full Merkle ledger. ~160 pure tests run with no database at all.</span>
+        <span class="es">La demo siembra tres regiones temáticas más seis <strong>recuerdos deliberadamente mal ubicados</strong>. Los agentes recuerdan, refuerzan, señalizan y los migran a casa — y el informe verifica cada cadena de hash y el libro Merkle completo. ~160 tests puros se ejecutan sin base de datos alguna.</span>
+      </p>
+    </div>
+    <div class="code-block reveal">
+      <div class="bar"><i></i><i></i><i></i></div>
+      <pre><span class="c"># <span class="en">Pure tests — no database needed</span><span class="es">Tests puros — sin base de datos</span></span>
+<span class="k">for</span> t <span class="k">in</span> tests/test_*_pure.py; <span class="k">do</span> python3 <span class="k">"$t"</span>; <span class="k">done</span>
+
+<span class="c"># <span class="en">Full demo against CockroachDB v25.2+</span><span class="es">Demo completa contra CockroachDB v25.2+</span></span>
+pip install psycopg sentence-transformers
+python -m demo.run_demo --dsn <span class="k">"$STIGMERGY_DSN"</span> \
+    --agents 3 --rounds 20 --provider minilm --local-resolver</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="logo">STIGMERGY</div>
+  <p>
+    <span class="en">Built for the <strong>CockroachDB × AWS — Build with Agentic Memory</strong> hackathon · Apache 2.0</span>
+    <span class="es">Creado para el hackathon <strong>CockroachDB × AWS — Build with Agentic Memory</strong> · Apache 2.0</span>
+  </p>
+  <p style="margin-top:.6rem;">
+    <a href="https://github.com/annatchijova/stigmergy" target="_blank" rel="noopener">github.com/annatchijova/stigmergy</a>
+  </p>
+</footer>
+
+<script>
+/* ---------- Language toggle ---------- */
+function setLang(lang) {
+  document.body.classList.toggle('lang-es', lang === 'es');
+  document.body.classList.toggle('lang-en', lang === 'en');
+  document.documentElement.lang = lang;
+  document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+  document.getElementById('btn-es').classList.toggle('active', lang === 'es');
+  try { localStorage.setItem('stigmergy-lang', lang); } catch (e) {}
+}
+(function () {
+  var saved = null;
+  try { saved = localStorage.getItem('stigmergy-lang'); } catch (e) {}
+  if (!saved && (navigator.language || '').toLowerCase().indexOf('es') === 0) saved = 'es';
+  if (saved === 'es') setLang('es');
+})();
+
+/* ---------- Scroll reveal ---------- */
+(function () {
+  var els = document.querySelectorAll('.reveal');
+  if (!('IntersectionObserver' in window)) {
+    els.forEach(function (el) { el.classList.add('in'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+    });
+  }, { threshold: 0.12 });
+  els.forEach(function (el) { io.observe(el); });
+})();
+
+/* ---------- Pheromone simulation (the wow) ----------
+   Real stigmergy on a canvas: agents deposit pheromone into a grid,
+   sense it ahead of them, steer toward stronger trails, and the
+   field evaporates every frame. Trails emerge; nobody coordinates. */
+(function () {
+  var canvas = document.getElementById('pheromones');
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!canvas || reduce) return;
+  var ctx = canvas.getContext('2d');
+
+  var CELL = 4;                 // pheromone grid cell size in px
+  var EVAPORATION = 0.965;      // per-frame decay (Invariant 7)
+  var DEPOSIT = 1.0;
+  var SENSE_DIST = 9;           // cells ahead
+  var SENSE_ANGLE = Math.PI / 4;
+  var TURN = 0.25;
+  var SPEED = 1.35;
+
+  var W, H, gw, gh, grid, agents;
+
+  function resize() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = canvas.clientWidth; H = canvas.clientHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    gw = Math.ceil(W / CELL); gh = Math.ceil(H / CELL);
+    grid = new Float32Array(gw * gh);
+    var n = Math.min(240, Math.max(90, Math.floor(W * H / 9000)));
+    agents = [];
+    for (var i = 0; i < n; i++) {
+      agents.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        a: Math.random() * Math.PI * 2
+      });
+    }
+  }
+
+  function sense(ag, offset) {
+    var a = ag.a + offset;
+    var cx = Math.floor((ag.x + Math.cos(a) * SENSE_DIST * CELL) / CELL);
+    var cy = Math.floor((ag.y + Math.sin(a) * SENSE_DIST * CELL) / CELL);
+    if (cx < 0) cx += gw; if (cx >= gw) cx -= gw;
+    if (cy < 0) cy += gh; if (cy >= gh) cy -= gh;
+    return grid[cy * gw + cx];
+  }
+
+  function step() {
+    // evaporate (pheromones are never permanently binding)
+    for (var i = 0; i < grid.length; i++) grid[i] *= EVAPORATION;
+
+    for (var k = 0; k < agents.length; k++) {
+      var ag = agents[k];
+      var L = sense(ag, -SENSE_ANGLE), C = sense(ag, 0), R = sense(ag, SENSE_ANGLE);
+      if (C >= L && C >= R) { /* keep heading */ }
+      else if (L > R) ag.a -= TURN;
+      else if (R > L) ag.a += TURN;
+      else ag.a += (Math.random() - 0.5) * TURN;
+      ag.a += (Math.random() - 0.5) * 0.18; // exploration noise
+
+      ag.x += Math.cos(ag.a) * SPEED;
+      ag.y += Math.sin(ag.a) * SPEED;
+      if (ag.x < 0) ag.x += W; if (ag.x >= W) ag.x -= W;
+      if (ag.y < 0) ag.y += H; if (ag.y >= H) ag.y -= H;
+
+      var gx = Math.floor(ag.x / CELL), gy = Math.floor(ag.y / CELL);
+      var idx = gy * gw + gx;
+      if (idx >= 0 && idx < grid.length) {
+        grid[idx] = Math.min(grid[idx] + DEPOSIT, 3);
+      }
+    }
+  }
+
+  function draw() {
+    ctx.fillStyle = '#141011';
+    ctx.fillRect(0, 0, W, H);
+
+    // pheromone field in coral
+    for (var y = 0; y < gh; y++) {
+      for (var x = 0; x < gw; x++) {
+        var v = grid[y * gw + x];
+        if (v > 0.06) {
+          var t = Math.min(v / 2.2, 1);
+          ctx.fillStyle = 'rgba(240, 147, 132, ' + (t * 0.34).toFixed(3) + ')';
+          ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+        }
+      }
+    }
+
+    // agents as bright motes
+    ctx.fillStyle = '#F7B8AD';
+    for (var k = 0; k < agents.length; k++) {
+      var ag = agents[k];
+      ctx.beginPath();
+      ctx.arc(ag.x, ag.y, 1.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  var running = true;
+  function loop() {
+    if (running) { step(); draw(); }
+    requestAnimationFrame(loop);
+  }
+
+  // pause when the hero is off-screen
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(function (entries) {
+      running = entries[0].isIntersecting;
+    }, { threshold: 0 }).observe(canvas);
+  }
+
+  var resizeT;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeT);
+    resizeT = setTimeout(resize, 150);
+  });
+
+  resize();
+  loop();
+})();
+</script>
+</body>
+</html>
