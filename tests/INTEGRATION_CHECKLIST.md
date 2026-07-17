@@ -38,6 +38,21 @@ Each item states what must be pinned, and which audit finding demands it.
 - [ ] **emit_signal FK translation (REC-013).** Nonexistent memory_id
       and nonexistent origin_region both surface as LookupError naming
       the ids, transaction cleanly aborted.
+- [ ] **One live signal per region (REDTEAM F-2, anti-flood).** The
+      partial unique index `one_live_signal_per_region` and emit_signal's
+      `ON CONFLICT (memory_id, origin_region) WHERE status='PENDING' DO
+      NOTHING` must run on CockroachDB (the inline partial UNIQUE INDEX
+      and the partial-index arbiter are the CRDB dialect parts not
+      exercisable off-cluster — the SEMANTICS are already pinned by
+      induction on SQLite, `scratchpad/induce_partial.py`). Verify:
+      (a) a region emitting twice for one memory while the first is
+      PENDING inserts once, the second returns the existing signal and
+      seals NO second SIGNAL_EMITTED event; (b) a different origin_region
+      still gets its own live signal; (c) after the first resolves
+      (ACCEPTED) or expires, the same region may emit again — history
+      rows are never displaced (Invariant 8); (d) the partial index does
+      NOT block two PENDING signals for the same memory from DIFFERENT
+      regions.
 - [ ] **MEMORY_MIGRATED payload forensics (REC-003).** After A→B,
       the sealed payload carries from_region=A, target_region=B,
       old_tier, new_tier=REGIONAL, and only target-origin signal ids in
