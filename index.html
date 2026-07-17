@@ -1020,9 +1020,7 @@ function setLang(lang) {
   try { localStorage.setItem('stigmergy-lang', lang); } catch (e) {}
 }
 (function () {
-  var saved = null;
-  try { saved = localStorage.getItem('stigmergy-lang'); } catch (e) {}
-  if (saved === 'es') setLang('es');
+  setLang('en');
 })();
 
 /* ---------- Replayable memory decision ---------- */
