@@ -1,0 +1,12 @@
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Local node identity (see audit chain: ~/.stigmergy/node_id is the default,
+# but never commit a persisted node id if one lands in-tree)
+.stigmergy/
+
+# OS / editor cruft
+.DS_Store
