@@ -107,7 +107,7 @@ def seed(dsn: str, provider) -> None:
 
 # --------------------------------------------------------------- agent --
 
-def agent_round(cur, *, agent_id: str, provider, theme: str, query: str,
+def agent_round(cur, *, agent_id: str, node_id: str, provider, theme: str, query: str,
                 stats: Counter) -> None:
     """One full agent round in ONE transaction (shared-cursor contract)."""
     cur.execute(
@@ -117,14 +117,14 @@ def agent_round(cur, *, agent_id: str, provider, theme: str, query: str,
     row = cur.fetchone()
     mode, region = (row[0], row[1]) if row else ("ROAMING", None)
 
-    rr = recall(cur, provider=provider, node_id=agent_id,
+    rr = recall(cur, provider=provider, node_id=node_id,
                 query_text=query,
                 region_id=region if mode == "DWELLING" else None,
                 limit=5)
     stats["recalls"] += 1
     stats["rediscovered"] += sum(1 for h in rr.hits if h.rediscovered)
     if not rr.hits:
-        observe(cur, node_id=agent_id, agent_id=agent_id,
+        observe(cur, node_id=node_id, agent_id=agent_id,
                 observation=Fraction(0))
         return
 
@@ -141,14 +141,14 @@ def agent_round(cur, *, agent_id: str, provider, theme: str, query: str,
     region_of = {str(i): r for i, r in cur.fetchall()}
     majority_region, _ = Counter(region_of.values()).most_common(1)[0]
 
-    res = observe(cur, node_id=agent_id, agent_id=agent_id,
+    res = observe(cur, node_id=node_id, agent_id=agent_id,
                   observation=density,
                   candidate_region=majority_region)
     if res.decision.transitioned:
         stats[f"mode->{res.decision.state.mode}"] += 1
 
     top = rr.hits[0]
-    reinforce(cur, node_id=agent_id, memory_id=top.memory_id,
+    reinforce(cur, node_id=node_id, memory_id=top.memory_id,
               reason=f"top recall hit for a {theme} query")
     stats["reinforcements"] += 1
 
@@ -156,7 +156,7 @@ def agent_round(cur, *, agent_id: str, provider, theme: str, query: str,
     # says a memory sits away from its resonant neighborhood — the
     # majority region recruits the outlier.
     if region_of[top.memory_id] != majority_region:
-        emit_signal(cur, node_id=agent_id,
+        emit_signal(cur, node_id=node_id,
                     origin_region=majority_region,
                     memory_id=top.memory_id,
                     reason="HIGH_RESONANCE",
@@ -164,7 +164,7 @@ def agent_round(cur, *, agent_id: str, provider, theme: str, query: str,
         stats["signals_emitted"] += 1
 
 
-def agent_loop(idx: int, dsn: str, provider, rounds: int, stats: Counter,
+def agent_loop(idx: int, dsn: str, node_id: str, provider, rounds: int, stats: Counter,
                lock: threading.Lock) -> None:
     agent_id = f"agent-{idx}"
     conn = connect(dsn)
@@ -175,7 +175,7 @@ def agent_loop(idx: int, dsn: str, provider, rounds: int, stats: Counter,
             query = random.choice(QUERIES[theme])
             run_in_transaction(
                 conn,
-                lambda cur: agent_round(cur, agent_id=agent_id,
+                lambda cur: agent_round(cur, agent_id=agent_id, node_id=node_id,
                                         provider=provider, theme=theme,
                                         query=query, stats=local),
             )
@@ -293,6 +293,10 @@ def report(dsn: str, provider, stats: Counter) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description="STIGMERGY demo")
     ap.add_argument("--dsn", default=os.environ.get("STIGMERGY_DSN", ""))
+    ap.add_argument("--seed-dsn", default=os.environ.get("STIGMERGY_SEED_DSN", ""))
+    ap.add_argument("--agent-dsn", action="append", default=[], metavar="DSN",
+                    help="one authenticated CockroachDB DSN per agent/node")
+    ap.add_argument("--resolver-dsn", default=os.environ.get("STIGMERGY_RESOLVER_DSN", ""))
     ap.add_argument("--agents", type=int, default=3)
     ap.add_argument("--rounds", type=int, default=20)
     ap.add_argument("--provider", choices=("deterministic", "minilm"),
@@ -302,11 +306,20 @@ def main() -> None:
     ap.add_argument("--skip-seed", action="store_true")
     args = ap.parse_args()
     if not args.dsn:
-        raise SystemExit("--dsn or STIGMERGY_DSN is required.")
+        raise SystemExit("--dsn or STIGMERGY_DSN is required for reporting.")
+    seed_dsn = args.seed_dsn or args.dsn
+    resolver_dsn = args.resolver_dsn or args.dsn
+    if args.agent_dsn and len(args.agent_dsn) != args.agents:
+        raise SystemExit("--agent-dsn must be supplied exactly once per --agents value.")
+    if not args.agent_dsn:
+        raise SystemExit(
+            "secure multi-node demo requires one --agent-dsn per agent; "
+            "each must authenticate as that agent's registered DB principal."
+        )
 
     provider = make_provider(args.provider)
     if not args.skip_seed:
-        seed(args.dsn, provider)
+        seed(seed_dsn, provider)
 
     stats: Counter = Counter()
     lock = threading.Lock()
@@ -315,13 +328,14 @@ def main() -> None:
     resolver = None
     if args.local_resolver:
         resolver = threading.Thread(
-            target=resolver_loop, args=(args.dsn, stop, stats, lock),
+            target=resolver_loop, args=(resolver_dsn, stop, stats, lock),
             daemon=True)
         resolver.start()
 
     threads = [
         threading.Thread(target=agent_loop,
-                         args=(i, args.dsn, provider, args.rounds, stats, lock))
+                         args=(i, args.agent_dsn[i], f"agent-{i}", provider,
+                               args.rounds, stats, lock))
         for i in range(args.agents)
     ]
     for t in threads:
