@@ -62,9 +62,12 @@ unnecessary would be less safe, not more.
    make audited, least-privilege capability grants. Do not insert future agent
    rows directly as part of ordinary deployment.
 5. Store each account's connection string in a separate AWS Secrets Manager
-   secret. Permit exactly its matching Lambda/task role to read that one
-   secret. Set `STIGMERGY_DSN` from it and set the matching
-   `STIGMERGY_NODE_ID` as a non-secret environment variable.
+   JSON secret such as `{"dsn":"postgresql://..."}`. Permit exactly its
+   matching Lambda/task role to read that one secret. Set its ARN as
+   `STIGMERGY_DSN_SECRET_ARN` and set the matching `STIGMERGY_NODE_ID` as a
+   non-secret environment variable. For the resolver ingress, use a third
+   JSON secret `{"token":"..."}` referenced by
+   `STIGMERGY_CHANGEFEED_TOKEN_SECRET_ARN`.
 6. Deploy the function, then invoke a harmless path before connecting live
    traffic: a resolver heartbeat and a sweeper tick. Both must prove the
    principal↔node binding. The sweeper must also prove `MAINTAIN`.

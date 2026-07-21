@@ -16,6 +16,7 @@ from lambdas.common import (
     env_int,
     require_deployment_authority,
     require_node_id,
+    require_secret_or_env,
 )
 import lambdas.changefeed_resolver as resolver_lambda
 import lambdas.cron_sweeper as sweeper_lambda
@@ -178,6 +179,73 @@ def t_env_int_defaults_and_rejects_garbage():
     finally:
         os.environ.pop("STIG_TEST_INT", None)
 
+def t_secret_config_requires_one_source_and_supports_local_value():
+    old_value = os.environ.get("STIG_TEST_SECRET")
+    old_arn = os.environ.get("STIG_TEST_SECRET_ARN")
+    try:
+        os.environ.pop("STIG_TEST_SECRET", None)
+        os.environ.pop("STIG_TEST_SECRET_ARN", None)
+        expect_raises(
+            RuntimeError,
+            lambda: require_secret_or_env("STIG_TEST_SECRET", "STIG_TEST_SECRET_ARN", json_key="value"),
+        )
+        os.environ["STIG_TEST_SECRET"] = "local-value"
+        assert require_secret_or_env(
+            "STIG_TEST_SECRET", "STIG_TEST_SECRET_ARN", json_key="value"
+        ) == "local-value"
+        os.environ["STIG_TEST_SECRET_ARN"] = "arn:also-set"
+        expect_raises(
+            RuntimeError,
+            lambda: require_secret_or_env("STIG_TEST_SECRET", "STIG_TEST_SECRET_ARN", json_key="value"),
+        )
+    finally:
+        if old_value is None:
+            os.environ.pop("STIG_TEST_SECRET", None)
+        else:
+            os.environ["STIG_TEST_SECRET"] = old_value
+        if old_arn is None:
+            os.environ.pop("STIG_TEST_SECRET_ARN", None)
+        else:
+            os.environ["STIG_TEST_SECRET_ARN"] = old_arn
+
+def t_secret_manager_value_is_json_keyed_and_cached_without_real_boto3():
+    old_value = os.environ.pop("STIG_TEST_SECRET", None)
+    old_arn = os.environ.get("STIG_TEST_SECRET_ARN")
+    old_boto3 = sys.modules.get("boto3")
+    common._secret_cache.clear()
+    calls = []
+    class FakeClient:
+        def get_secret_value(self, *, SecretId):
+            calls.append(SecretId)
+            return {"SecretString": '{"value":"from-aws-secret"}'}
+    class FakeBoto3:
+        @staticmethod
+        def client(name):
+            assert name == "secretsmanager"
+            return FakeClient()
+    try:
+        sys.modules["boto3"] = FakeBoto3
+        os.environ["STIG_TEST_SECRET_ARN"] = "arn:test:secret"
+        assert require_secret_or_env(
+            "STIG_TEST_SECRET", "STIG_TEST_SECRET_ARN", json_key="value"
+        ) == "from-aws-secret"
+        assert require_secret_or_env(
+            "STIG_TEST_SECRET", "STIG_TEST_SECRET_ARN", json_key="value"
+        ) == "from-aws-secret"
+        assert calls == ["arn:test:secret"]
+    finally:
+        common._secret_cache.clear()
+        if old_boto3 is None:
+            sys.modules.pop("boto3", None)
+        else:
+            sys.modules["boto3"] = old_boto3
+        if old_value is not None:
+            os.environ["STIG_TEST_SECRET"] = old_value
+        if old_arn is None:
+            os.environ.pop("STIG_TEST_SECRET_ARN", None)
+        else:
+            os.environ["STIG_TEST_SECRET_ARN"] = old_arn
+
 def t_deployment_authority_binds_identity_and_optional_global_capability():
     # Unit-test the Lambda boundary without pretending a mock cursor can prove
     # current_user.  The real principal-binding path is exercised against a
@@ -210,12 +278,14 @@ def t_deployment_authority_binds_identity_and_optional_global_capability():
 def t_resolver_heartbeat_validates_deployment_identity():
     old_node = os.environ.get("STIGMERGY_NODE_ID")
     old_token = os.environ.get("STIGMERGY_CHANGEFEED_TOKEN")
+    old_token_arn = os.environ.get("STIGMERGY_CHANGEFEED_TOKEN_SECRET_ARN")
     old_connection = resolver_lambda.get_connection
     old_authority = resolver_lambda.require_deployment_authority
     calls = []
     try:
         os.environ["STIGMERGY_NODE_ID"] = "resolver-node"
         os.environ["STIGMERGY_CHANGEFEED_TOKEN"] = "test-changefeed-token"
+        os.environ.pop("STIGMERGY_CHANGEFEED_TOKEN_SECRET_ARN", None)
         resolver_lambda.get_connection = lambda: "resolver-connection"
         resolver_lambda.require_deployment_authority = lambda conn, node: calls.append((conn, node))
         result = resolver_lambda.handler({
@@ -235,11 +305,17 @@ def t_resolver_heartbeat_validates_deployment_identity():
             os.environ.pop("STIGMERGY_CHANGEFEED_TOKEN", None)
         else:
             os.environ["STIGMERGY_CHANGEFEED_TOKEN"] = old_token
+        if old_token_arn is None:
+            os.environ.pop("STIGMERGY_CHANGEFEED_TOKEN_SECRET_ARN", None)
+        else:
+            os.environ["STIGMERGY_CHANGEFEED_TOKEN_SECRET_ARN"] = old_token_arn
 
 def t_changefeed_ingress_requires_exact_configured_token():
     old_token = os.environ.get("STIGMERGY_CHANGEFEED_TOKEN")
+    old_token_arn = os.environ.get("STIGMERGY_CHANGEFEED_TOKEN_SECRET_ARN")
     try:
         os.environ["STIGMERGY_CHANGEFEED_TOKEN"] = "s3cret"
+        os.environ.pop("STIGMERGY_CHANGEFEED_TOKEN_SECRET_ARN", None)
         assert changefeed_request_is_authenticated({
             "headers": {"x-stigmergy-changefeed-token": "s3cret"}
         })
@@ -256,12 +332,18 @@ def t_changefeed_ingress_requires_exact_configured_token():
             os.environ.pop("STIGMERGY_CHANGEFEED_TOKEN", None)
         else:
             os.environ["STIGMERGY_CHANGEFEED_TOKEN"] = old_token
+        if old_token_arn is None:
+            os.environ.pop("STIGMERGY_CHANGEFEED_TOKEN_SECRET_ARN", None)
+        else:
+            os.environ["STIGMERGY_CHANGEFEED_TOKEN_SECRET_ARN"] = old_token_arn
 
 def t_unauthenticated_changefeed_request_never_connects():
     old_token = os.environ.get("STIGMERGY_CHANGEFEED_TOKEN")
+    old_token_arn = os.environ.get("STIGMERGY_CHANGEFEED_TOKEN_SECRET_ARN")
     old_connection = resolver_lambda.get_connection
     try:
         os.environ["STIGMERGY_CHANGEFEED_TOKEN"] = "s3cret"
+        os.environ.pop("STIGMERGY_CHANGEFEED_TOKEN_SECRET_ARN", None)
         resolver_lambda.get_connection = lambda: (_ for _ in ()).throw(
             AssertionError("unauthenticated request touched database")
         )
@@ -273,6 +355,10 @@ def t_unauthenticated_changefeed_request_never_connects():
             os.environ.pop("STIGMERGY_CHANGEFEED_TOKEN", None)
         else:
             os.environ["STIGMERGY_CHANGEFEED_TOKEN"] = old_token
+        if old_token_arn is None:
+            os.environ.pop("STIGMERGY_CHANGEFEED_TOKEN_SECRET_ARN", None)
+        else:
+            os.environ["STIGMERGY_CHANGEFEED_TOKEN_SECRET_ARN"] = old_token_arn
 
 def t_sweeper_requires_maintain_before_empty_drain():
     old_node = os.environ.get("STIGMERGY_NODE_ID")

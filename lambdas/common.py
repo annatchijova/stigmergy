@@ -35,6 +35,7 @@ _MAX_NODE_ID_LEN = 64
 _NODE_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 _conn = None  # module-global, reused across warm invocations
+_secret_cache: dict[tuple[str, str], str] = {}
 
 
 def require_env(name: str) -> str:
@@ -45,6 +46,74 @@ def require_env(name: str) -> str:
             "Refusing to start with a missing identity or endpoint."
         )
     return value
+
+
+def require_secret_or_env(
+    value_env: str,
+    secret_arn_env: str,
+    *,
+    json_key: str,
+) -> str:
+    """Read a deployment secret from one deliberate source.
+
+    Local development may supply the value directly. AWS deployments supply a
+    Secrets Manager ARN and receive a JSON secret containing ``json_key``.
+    Supplying both is a configuration contradiction, not a fallback: it makes
+    it unclear which credential the function is actually using. Values are
+    cached only in the warm Lambda process and never included in an error.
+    ``boto3`` stays lazy so pure/local code has no AWS import dependency.
+    """
+    direct = os.environ.get(value_env, "").strip()
+    secret_arn = os.environ.get(secret_arn_env, "").strip()
+    if direct and secret_arn:
+        raise RuntimeError(
+            f"Set exactly one of {value_env} or {secret_arn_env}; refusing "
+            "ambiguous secret configuration."
+        )
+    if direct:
+        return direct
+    if not secret_arn:
+        raise RuntimeError(
+            f"One of {value_env} or {secret_arn_env} is required deployment "
+            "configuration and is not set."
+        )
+
+    cache_key = (secret_arn, json_key)
+    cached = _secret_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    import boto3  # lazy: only AWS deployments need the SDK client
+    import json
+
+    response = boto3.client("secretsmanager").get_secret_value(SecretId=secret_arn)
+    raw = response.get("SecretString")
+    if not isinstance(raw, str):
+        raise RuntimeError(
+            f"Secrets Manager secret configured by {secret_arn_env} has no text SecretString."
+        )
+    try:
+        document = json.loads(raw)
+    except json.JSONDecodeError:
+        raise RuntimeError(
+            f"Secrets Manager secret configured by {secret_arn_env} must be a JSON object "
+            f"containing {json_key!r}."
+        ) from None
+    value = document.get(json_key) if isinstance(document, dict) else None
+    if not isinstance(value, str) or not value.strip():
+        raise RuntimeError(
+            f"Secrets Manager secret configured by {secret_arn_env} lacks a non-empty "
+            f"{json_key!r} value."
+        )
+    _secret_cache[cache_key] = value
+    return value
+
+
+def require_dsn() -> str:
+    """Resolve the DSN from local config or its dedicated AWS secret."""
+    return require_secret_or_env(
+        "STIGMERGY_DSN", "STIGMERGY_DSN_SECRET_ARN", json_key="dsn"
+    )
 
 
 def require_node_id() -> str:
@@ -94,7 +163,7 @@ def get_connection():
     import psycopg  # lazy: see module docstring
 
     if _conn is None or _conn.closed:
-        _conn = psycopg.connect(require_env("STIGMERGY_DSN"), autocommit=False)
+        _conn = psycopg.connect(require_dsn(), autocommit=False)
     return _conn
 
 

@@ -86,6 +86,18 @@ cannot update an existing agent's controller state.
 - Documented rotation and job-inspection exposure as operational requirements;
   this is a shared secret boundary, not a claim of AWS IAM authentication.
 
+### Account-free AWS deployment scaffold
+
+- Added `infra/template.json`: AWS SAM definitions for separate resolver and
+  sweeper functions, execution roles, least-scoped Secrets Manager reads, a
+  resolver Function URL, and an EventBridge schedule.
+- Runtime DSNs and the ingress token can now be loaded lazily from distinct
+  JSON Secrets Manager secrets. Direct environment values remain an explicit
+  local-development fallback; setting both sources is rejected as ambiguous.
+- Added a dependency pin for Lambda packaging and a JSON-only static template
+  regression. The scaffold is intentionally not presented as deployed AWS
+  evidence; `infra/README.md` records the order that makes it real.
+
 ## Evidence
 
 The executed adversarial experiments are in

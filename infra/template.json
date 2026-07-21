@@ -1,0 +1,68 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Transform": "AWS::Serverless-2016-10-31",
+  "Description": "STIGMERGY: separate authenticated CockroachDB Lambda nodes.",
+  "Parameters": {
+    "ResolverDsnSecretArn": {"Type": "String", "Description": "Secrets Manager JSON secret with key dsn for resolver-prod."},
+    "ResolverIngressSecretArn": {"Type": "String", "Description": "Secrets Manager JSON secret with key token for CockroachDB webhook ingress."},
+    "SweeperDsnSecretArn": {"Type": "String", "Description": "Secrets Manager JSON secret with key dsn for sweeper-prod."},
+    "ResolverNodeId": {"Type": "String", "Default": "resolver-prod"},
+    "SweeperNodeId": {"Type": "String", "Default": "sweeper-prod"},
+    "SweepSchedule": {"Type": "String", "Default": "rate(5 minutes)"}
+  },
+  "Resources": {
+    "ResolverRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "lambda.amazonaws.com"}, "Action": "sts:AssumeRole"}]},
+        "Policies": [{"PolicyName": "resolver-secrets-and-logs", "PolicyDocument": {"Version": "2012-10-17", "Statement": [
+          {"Effect": "Allow", "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"], "Resource": "*"},
+          {"Effect": "Allow", "Action": ["secretsmanager:GetSecretValue"], "Resource": [{"Ref": "ResolverDsnSecretArn"}, {"Ref": "ResolverIngressSecretArn"}]}
+        ]}}]
+      }
+    },
+    "SweeperRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "lambda.amazonaws.com"}, "Action": "sts:AssumeRole"}]},
+        "Policies": [{"PolicyName": "sweeper-secrets-and-logs", "PolicyDocument": {"Version": "2012-10-17", "Statement": [
+          {"Effect": "Allow", "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"], "Resource": "*"},
+          {"Effect": "Allow", "Action": ["secretsmanager:GetSecretValue"], "Resource": {"Ref": "SweeperDsnSecretArn"}}
+        ]}}]
+      }
+    },
+    "ResolverFunction": {
+      "Type": "AWS::Serverless::Function",
+      "Properties": {
+        "CodeUri": "../",
+        "Handler": "lambdas.changefeed_resolver.handler",
+        "Runtime": "python3.12",
+        "Architectures": ["x86_64"],
+        "MemorySize": 512,
+        "Timeout": 30,
+        "Role": {"Fn::GetAtt": ["ResolverRole", "Arn"]},
+        "Environment": {"Variables": {"STIGMERGY_NODE_ID": {"Ref": "ResolverNodeId"}, "STIGMERGY_DSN_SECRET_ARN": {"Ref": "ResolverDsnSecretArn"}, "STIGMERGY_CHANGEFEED_TOKEN_SECRET_ARN": {"Ref": "ResolverIngressSecretArn"}}},
+        "FunctionUrlConfig": {"AuthType": "NONE", "InvokeMode": "BUFFERED"}
+      }
+    },
+    "SweeperFunction": {
+      "Type": "AWS::Serverless::Function",
+      "Properties": {
+        "CodeUri": "../",
+        "Handler": "lambdas.cron_sweeper.handler",
+        "Runtime": "python3.12",
+        "Architectures": ["x86_64"],
+        "MemorySize": 512,
+        "Timeout": 60,
+        "Role": {"Fn::GetAtt": ["SweeperRole", "Arn"]},
+        "Environment": {"Variables": {"STIGMERGY_NODE_ID": {"Ref": "SweeperNodeId"}, "STIGMERGY_DSN_SECRET_ARN": {"Ref": "SweeperDsnSecretArn"}}},
+        "Events": {"ScheduledSweep": {"Type": "Schedule", "Properties": {"Schedule": {"Ref": "SweepSchedule"}}}}
+      }
+    }
+  },
+  "Outputs": {
+    "ResolverFunctionUrl": {"Value": {"Fn::GetAtt": ["ResolverFunctionUrl", "FunctionUrl"]}, "Description": "Configure this URL as the CockroachDB webhook sink with extra_headers."},
+    "ResolverRoleArn": {"Value": {"Fn::GetAtt": ["ResolverRole", "Arn"]}},
+    "SweeperRoleArn": {"Value": {"Fn::GetAtt": ["SweeperRole", "Arn"]}}
+  }
+}

@@ -43,14 +43,18 @@ from __future__ import annotations
 
 import hmac
 import json
-import os
 from dataclasses import dataclass
 
 from audit.chain import run_in_transaction
 from ops.recruitment import (
     CooldownActive, RegionUnavailable, resolve_recruitment,
 )
-from .common import get_connection, require_deployment_authority, require_node_id
+from .common import (
+    get_connection,
+    require_deployment_authority,
+    require_node_id,
+    require_secret_or_env,
+)
 
 
 _CHANGEFEED_TOKEN_HEADER = "x-stigmergy-changefeed-token"
@@ -58,13 +62,11 @@ _CHANGEFEED_TOKEN_HEADER = "x-stigmergy-changefeed-token"
 
 def _configured_changefeed_token() -> str:
     """Read the resolver's ingress secret without accepting an empty value."""
-    token = os.environ.get("STIGMERGY_CHANGEFEED_TOKEN", "")
-    if not token:
-        raise RuntimeError(
-            "STIGMERGY_CHANGEFEED_TOKEN is required for the public changefeed "
-            "ingress; refusing an unauthenticated resolver deployment."
-        )
-    return token
+    return require_secret_or_env(
+        "STIGMERGY_CHANGEFEED_TOKEN",
+        "STIGMERGY_CHANGEFEED_TOKEN_SECRET_ARN",
+        json_key="token",
+    )
 
 
 def changefeed_request_is_authenticated(event) -> bool:

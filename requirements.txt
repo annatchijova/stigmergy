@@ -1,0 +1,3 @@
+# Lambda runtime dependency. AWS SAM installs this during `sam build`.
+# The binary extra supplies a compatible libpq wheel for the Lambda runtime.
+psycopg[binary]>=3.2,<4

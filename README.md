@@ -25,6 +25,8 @@ it covers trusted bootstrap, least-privilege principals per Lambda/agent, the
 capability vocabulary, and the remaining trust boundary.
 For the concrete AWS Lambda ↔ CockroachDB service-account mapping, read
 [docs/AWS_COCKROACH_DEPLOYMENT_CONTRACT.md](docs/AWS_COCKROACH_DEPLOYMENT_CONTRACT.md).
+The account-free, reviewable AWS SAM scaffold lives in
+[infra/README.md](infra/README.md).
 
 The executed adversarial evidence is recorded in
 [docs/SECURITY_AUDIT_ROUND_2.md](docs/SECURITY_AUDIT_ROUND_2.md).
@@ -114,6 +116,12 @@ certainty, and the demo obeys its own Failure philosophy.
 changefeed Lambda so the demo runs on a laptop without AWS.
 
 ## Deploying the Lambdas
+
+The repository includes `infra/template.json`, which provisions separately
+scoped Lambda roles, Secrets Manager access, a resolver Function URL, and the
+EventBridge sweeper schedule. It has static contract coverage without an AWS
+account; its deployment sequence and explicit non-claims are in
+[`infra/README.md`](infra/README.md).
 
 Both require env: `STIGMERGY_NODE_ID` (a Lambda IS a node; identity is
 deployment configuration) and `STIGMERGY_DSN`. On every valid invocation they
