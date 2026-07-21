@@ -61,6 +61,14 @@ exact thresholds, envelope parsing, drain budgets, lineage discipline.
 Transactional behavior is deliberately NOT faked with mock cursors — it
 runs against the real cluster per `tests/INTEGRATION_CHECKLIST.md`.
 
+To run the authority regression on a disposable local CockroachDB node:
+
+    ./tools/run_authority_integration.sh
+
+It starts a localhost-only temporary cluster, applies the schema, proves that
+principal impersonation, cross-agent controller mutation, and revoked writes
+are rejected, verifies the chain, then removes the cluster data.
+
 ## Running the demo
 
 Requires CockroachDB v25.2+ with `SET CLUSTER SETTING
