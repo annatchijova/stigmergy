@@ -1,4 +1,5 @@
 from .controller import (
+    AgentOwnershipDenied,
     ControllerParams,
     ControllerState,
     Decision,
@@ -49,7 +50,7 @@ from .authority import (
 
 __all__ = [
     # controller
-    "ControllerParams", "ControllerState", "Decision", "ObserveResult",
+    "AgentOwnershipDenied", "ControllerParams", "ControllerState", "Decision", "ObserveResult",
     "StateWriteConflict", "observe", "resonance_density", "step",
     # memories
     "ProviderMismatch", "RecallResult", "ReinforcedMemory", "StoredMemory",

@@ -271,6 +271,7 @@ CREATE TABLE recruitment_signals (
 -- -----------------------------------------------------------------------------
 CREATE TABLE agent_search_state (
     agent_id            STRING PRIMARY KEY,
+    owner_node_id       STRING NOT NULL REFERENCES agent_nodes(node_id),
     mode                 STRING NOT NULL DEFAULT 'ROAMING' CHECK (mode IN ('ROAMING','DWELLING')),
     current_region        STRING REFERENCES memory_regions(region_id),
     confidence_ema         DECIMAL(11,10) NOT NULL DEFAULT 0

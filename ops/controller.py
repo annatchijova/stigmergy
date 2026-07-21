@@ -77,6 +77,10 @@ class StateWriteConflict(Exception):
     """
 
 
+class AgentOwnershipDenied(PermissionError):
+    """An authenticated node attempted to mutate another node's agent state."""
+
+
 def _require_fraction(value, name: str) -> None:
     if not isinstance(value, Fraction):
         raise TypeError(f"{name} must be Fraction, got {type(value).__name__} — "
@@ -289,11 +293,12 @@ def observe(
         raise TypeError(f"params must be ControllerParams, got "
                         f"{type(params).__name__}.")
 
-    require_active_node(cur, node_id=node_id)
+    identity = require_active_node(cur, node_id=node_id)
 
     cur.execute(
         """
-        SELECT mode, current_region, confidence_ema, ema_prev, stagnation_count
+        SELECT owner_node_id, mode, current_region, confidence_ema, ema_prev,
+               stagnation_count
           FROM agent_search_state
          WHERE agent_id = %s
            FOR UPDATE
@@ -304,7 +309,12 @@ def observe(
     if row is None:
         state, region, is_new = INITIAL_STATE, None, True
     else:
-        mode, region, ema_dec, ema_prev_dec, stagnation = row
+        owner_node_id, mode, region, ema_dec, ema_prev_dec, stagnation = row
+        if owner_node_id != identity.node_id:
+            raise AgentOwnershipDenied(
+                f"agent {agent_id!r} belongs to node {owner_node_id!r}, not "
+                f"authenticated node {identity.node_id!r}."
+            )
         state = ControllerState(
             mode=mode,
             ema=Fraction(ema_dec),           # exact: Decimal -> Fraction
@@ -338,11 +348,11 @@ def observe(
             cur.execute(
                 """
                 INSERT INTO agent_search_state
-                    (agent_id, mode, current_region,
+                    (agent_id, owner_node_id, mode, current_region,
                      confidence_ema, ema_prev, stagnation_count)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
-                (agent_id, new.mode, new_region, q_ema, q_prev,
+                (agent_id, identity.node_id, new.mode, new_region, q_ema, q_prev,
                  new.stagnation_count),
             )
         else:
