@@ -92,9 +92,11 @@ def create_region(
     try:
         cur.execute(
             """
-            INSERT INTO memory_regions
-                (region_id, locality, generation, parent_region, status)
-            VALUES (%s, %s, %s, %s, 'ACTIVE')
+        INSERT INTO memory_regions
+            (region_id, locality, generation, parent_region, status)
+        VALUES (%s, %s, %s, %s, 'ACTIVE')
+        ON CONFLICT (region_id) DO NOTHING
+        RETURNING region_id
             """,
             (region_id, locality, generation, parent_region),
         )
@@ -103,13 +105,14 @@ def create_region(
         if sqlstate is None:
             diag = getattr(exc, "diag", None)
             sqlstate = getattr(diag, "sqlstate", None)
-        if sqlstate == "23505":  # unique_violation: region already exists
-            raise RegionExists(f"region {region_id!r} already exists.") from exc
         if sqlstate == "23503":  # foreign_key_violation: parent missing
             raise LookupError(
                 f"parent_region {parent_region!r} does not exist."
             ) from exc
         raise
+
+    if cur.fetchone() is None:
+        raise RegionExists(f"region {region_id!r} already exists.")
 
     append_event(
         cur,
