@@ -57,6 +57,7 @@ from fractions import Fraction
 
 from audit.canonical import quantize
 from audit.chain import append_event
+from .authority import require_active_node
 
 MODES = ("ROAMING", "DWELLING")
 
@@ -205,7 +206,7 @@ def step(
         raise ValueError("stagnation_count must be >= 0.")
     if not isinstance(params, ControllerParams):
         raise TypeError(f"params must be ControllerParams, got "
-                        f"{type(params).__name__}.")
+            f"{type(params).__name__}.")
 
     new_ema = params.beta * observation + (1 - params.beta) * state.ema
 
@@ -287,6 +288,8 @@ def observe(
     if not isinstance(params, ControllerParams):
         raise TypeError(f"params must be ControllerParams, got "
                         f"{type(params).__name__}.")
+
+    require_active_node(cur, node_id=node_id)
 
     cur.execute(
         """

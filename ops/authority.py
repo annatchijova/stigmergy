@@ -36,6 +36,8 @@ VALID_REGION_CAPABILITIES = frozenset({
     "REGION_ADMIN",
 })
 
+VALID_NODE_CAPABILITIES = frozenset({"MAINTAIN", "REGION_ADMIN"})
+
 
 class AuthorityError(PermissionError):
     """Base class for a refused node-authority boundary."""
@@ -84,6 +86,16 @@ def validate_region_capability(capability: str) -> str:
         raise ValueError(
             "capability must be one of "
             f"{tuple(sorted(VALID_REGION_CAPABILITIES))}, got {capability!r}."
+        )
+    return capability
+
+
+def validate_node_capability(capability: str) -> str:
+    """Reject an undeclared non-regional authority verb before SQL."""
+    if not isinstance(capability, str) or capability not in VALID_NODE_CAPABILITIES:
+        raise ValueError(
+            "capability must be one of "
+            f"{tuple(sorted(VALID_NODE_CAPABILITIES))}, got {capability!r}."
         )
     return capability
 
@@ -152,5 +164,29 @@ def require_region_capability(
         raise RegionCapabilityDenied(
             f"node {identity.node_id!r} has no active {capability} capability "
             f"for region {region_id!r} (grant is {state})."
+        )
+    return identity
+
+
+def require_node_capability(cur, *, node_id: str, capability: str) -> NodeIdentity:
+    """Require an active authenticated node with a live global capability."""
+    capability = validate_node_capability(capability)
+    identity = require_active_node(cur, node_id=node_id)
+    cur.execute(
+        """
+        SELECT status
+          FROM node_capabilities
+         WHERE node_id = %s
+           AND capability = %s
+           FOR SHARE
+        """,
+        (identity.node_id, capability),
+    )
+    row = cur.fetchone()
+    if row is None or row[0] != "ACTIVE":
+        state = "absent" if row is None else repr(row[0])
+        raise RegionCapabilityDenied(
+            f"node {identity.node_id!r} has no active {capability} capability "
+            f"(grant is {state})."
         )
     return identity

@@ -116,6 +116,23 @@ CREATE TABLE agent_nodes (
     )
 );
 
+CREATE TABLE node_capabilities (
+    node_id               STRING NOT NULL REFERENCES agent_nodes(node_id),
+    capability            STRING NOT NULL CHECK (capability IN (
+                              'MAINTAIN', 'REGION_ADMIN'
+                          )),
+    status                STRING NOT NULL DEFAULT 'ACTIVE'
+                              CHECK (status IN ('ACTIVE', 'REVOKED')),
+    granted_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    revoked_at            TIMESTAMPTZ,
+    revoke_reason         STRING,
+    PRIMARY KEY (node_id, capability),
+    CHECK (
+        (status = 'ACTIVE'  AND revoked_at IS NULL AND revoke_reason IS NULL)
+     OR (status = 'REVOKED' AND revoked_at IS NOT NULL AND revoke_reason IS NOT NULL)
+    )
+);
+
 CREATE TABLE node_region_capabilities (
     node_id               STRING NOT NULL REFERENCES agent_nodes(node_id),
     region_id             STRING NOT NULL REFERENCES memory_regions(region_id),

@@ -7,7 +7,13 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ops.authority import VALID_REGION_CAPABILITIES, validate_node_id, validate_region_capability
+from ops.authority import (
+    VALID_NODE_CAPABILITIES,
+    VALID_REGION_CAPABILITIES,
+    validate_node_capability,
+    validate_node_id,
+    validate_region_capability,
+)
 
 failures = []
 
@@ -47,6 +53,13 @@ def t_capabilities_are_a_closed_vocabulary():
     assert "SIGNAL" in VALID_REGION_CAPABILITIES
     for bad in ("", "DISPATCH", "*", None, 7):
         expect_raises(ValueError, lambda bad=bad: validate_region_capability(bad))
+
+
+def t_global_capabilities_are_separate_and_closed():
+    assert validate_node_capability("MAINTAIN") == "MAINTAIN"
+    assert "REGION_ADMIN" in VALID_NODE_CAPABILITIES
+    for bad in ("STORE", "ROOT", "", None):
+        expect_raises(ValueError, lambda bad=bad: validate_node_capability(bad))
 
 
 if __name__ == "__main__":

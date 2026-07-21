@@ -23,6 +23,7 @@ import re
 from dataclasses import dataclass
 
 from audit.chain import append_event
+from .authority import require_node_capability
 
 REGION_ID_MAX_LEN = 64
 _REGION_ID_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
@@ -85,6 +86,8 @@ def create_region(
         not isinstance(parent_region, str) or not parent_region.strip()
     ):
         raise ValueError("parent_region, when given, must be a non-empty string.")
+
+    require_node_capability(cur, node_id=node_id, capability="REGION_ADMIN")
 
     try:
         cur.execute(

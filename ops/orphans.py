@@ -65,6 +65,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from audit.chain import _format_ts, append_event
+from .authority import require_node_capability
 
 # Tiers that sweep. GLOBAL is deliberately absent — see module docstring.
 # ORPHANED is absent because orphaning an orphan is not a transition.
@@ -170,6 +171,7 @@ def sweep_orphans(
     _validate_window(window)
     _validate_limit(limit)
     states = _validate_states(eligible_states)
+    require_node_capability(cur, node_id=node_id, capability="MAINTAIN")
     if now is not None and now.tzinfo is None:
         raise ValueError("now must be timezone-aware UTC — naive datetimes "
                          "do not enter the audit chain.")

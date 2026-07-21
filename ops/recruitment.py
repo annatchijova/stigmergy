@@ -65,6 +65,7 @@ from fractions import Fraction
 
 from audit.canonical import quantize
 from audit.chain import append_event
+from .authority import require_node_capability, require_region_capability
 
 # A signal whose decayed strength falls below this is effectively gone —
 # a late arrival can still see a faint pheromone, but it no longer counts
@@ -152,7 +153,11 @@ def emit_signal(
         raise TypeError(f"ttl must be timedelta, got {type(ttl).__name__}.")
     if ttl <= timedelta(0):
         raise ValueError(f"ttl must be positive, got {ttl!r} — a signal that "
-                         "expires at or before its own creation is not a signal.")
+            "expires at or before its own creation is not a signal.")
+
+    require_region_capability(
+        cur, node_id=node_id, region_id=origin_region, capability="SIGNAL"
+    )
 
     now = datetime.now(timezone.utc)
     expires_at = now + ttl
@@ -393,6 +398,10 @@ def resolve_recruitment(
     if not (0 < liveness_floor < 1):
         raise ValueError(f"liveness_floor {liveness_floor} outside (0, 1).")
 
+    require_region_capability(
+        cur, node_id=node_id, region_id=target_region, capability="RESOLVE"
+    )
+
     now = datetime.now(timezone.utc)
 
     # REC-011: existence AND status. The FK on memories.region_id would
@@ -590,6 +599,8 @@ def expire_signals(
         raise TypeError(f"limit must be int, got {type(limit).__name__}.")
     if limit < 1:
         raise ValueError(f"limit must be >= 1, got {limit}.")
+
+    require_node_capability(cur, node_id=node_id, capability="MAINTAIN")
 
     now = now or datetime.now(timezone.utc)
     cur.execute(

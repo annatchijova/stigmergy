@@ -51,6 +51,7 @@ from fractions import Fraction
 
 from audit.canonical import quantize
 from audit.chain import append_event
+from .authority import require_region_capability
 
 # Reinforcement step: c' = c + (1 - c) * ALPHA. Exact rational constant —
 # deterministic, monotone, bounded in [0,1), fixed point at exactly 1.
@@ -175,6 +176,9 @@ def store(
     if not content or not content.strip():
         raise ValueError("Refusing to store an empty memory — an episodic "
                          "memory without content is not a memory.")
+    require_region_capability(
+        cur, node_id=node_id, region_id=region_id, capability="STORE"
+    )
     vector = provider.embed(content)
 
     # Local import: to_pgvector_literal lives with the providers, and this
@@ -394,7 +398,7 @@ def reinforce(cur, *, node_id: str, memory_id: str, reason: str) -> ReinforcedMe
     """
     cur.execute(
         """
-        SELECT confidence, state
+        SELECT confidence, state, region_id
           FROM memories
          WHERE id = %s
            FOR UPDATE
@@ -404,7 +408,10 @@ def reinforce(cur, *, node_id: str, memory_id: str, reason: str) -> ReinforcedMe
     row = cur.fetchone()
     if row is None:
         raise LookupError(f"memory {memory_id} does not exist.")
-    old_conf_decimal, old_state = row
+    old_conf_decimal, old_state, region_id = row
+    require_region_capability(
+        cur, node_id=node_id, region_id=region_id, capability="REINFORCE"
+    )
 
     old_conf = Fraction(old_conf_decimal)          # exact: Decimal -> Fraction
     new_conf = reinforce_confidence(old_conf)      # exact: pure Fraction rule
