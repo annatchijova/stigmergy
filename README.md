@@ -76,8 +76,18 @@ feature.vector_index.enabled = true;` and the schema applied
 (`cockroach sql < schema.sql`).
 
     pip install psycopg sentence-transformers
-    python -m demo.run_demo --dsn "$STIGMERGY_DSN" \
+    python -m demo.run_demo --dsn "$STIGMERGY_REPORT_DSN" \
+        --seed-dsn "$STIGMERGY_SEED_DSN" \
+        --agent-dsn "$STIGMERGY_AGENT_0_DSN" \
+        --agent-dsn "$STIGMERGY_AGENT_1_DSN" \
+        --agent-dsn "$STIGMERGY_AGENT_2_DSN" \
+        --resolver-dsn "$STIGMERGY_RESOLVER_DSN" \
         --agents 3 --rounds 20 --provider minilm --local-resolver
+
+The secure demo uses one authenticated CockroachDB principal per node: seeder,
+each agent, and resolver. Register the matching node ids and grants first as
+described in `AUTHORITY_MODEL.md`; `--agent-dsn` is intentionally required once
+per agent so a single shared connection cannot masquerade as many nodes.
 
 The corpus seeds three themed regions plus six **deliberately misplaced
 memories**. Agents (each a distinct audit node) recall, reinforce, and
