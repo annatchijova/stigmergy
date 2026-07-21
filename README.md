@@ -88,6 +88,7 @@ The secure demo uses one authenticated CockroachDB principal per node: seeder,
 each agent, and resolver. Register the matching node ids and grants first as
 described in `AUTHORITY_MODEL.md`; `--agent-dsn` is intentionally required once
 per agent so a single shared connection cannot masquerade as many nodes.
+For the local video setup, see `tools/secure_demo_local.md`.
 
 The corpus seeds three themed regions plus six **deliberately misplaced
 memories**. Agents (each a distinct audit node) recall, reinforce, and
