@@ -32,6 +32,8 @@ The executed adversarial evidence is recorded in
 [docs/SECURITY_AUDIT_ROUND_2.md](docs/SECURITY_AUDIT_ROUND_2.md).
 The implementation and reproducibility work is summarized in
 [docs/ENGINEERING_LOG_2026-07-21.md](docs/ENGINEERING_LOG_2026-07-21.md).
+The honest Cloud-deployment, demo, and post-submission sequence is tracked in
+[TODO.md](TODO.md).
 
 ## Layout
 
