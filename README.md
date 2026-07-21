@@ -12,6 +12,18 @@ hackathon. Apache 2.0. Design document: `ARCHITECTURE.md`. Schema (the
 real spec — most invariants are constraints, not conventions):
 `schema.sql`.
 
+## Authority after the MNEME red-team transfer
+
+Hash chains show what happened; they do not authorize the writer. STIGMERGY
+binds every mutable `node_id` to CockroachDB's authenticated database principal
+and requires an explicit capability for the relevant region. A revoked node
+cannot keep storing, reinforcing, signalling, resolving, or running
+maintenance merely by naming its old node id.
+
+Read [AUTHORITY_MODEL.md](AUTHORITY_MODEL.md) before deploying mutable agents:
+it covers trusted bootstrap, least-privilege principals per Lambda/agent, the
+capability vocabulary, and the remaining trust boundary.
+
 ## Layout
 
     audit/        canonical JSON + quantization, per-node hash chains,

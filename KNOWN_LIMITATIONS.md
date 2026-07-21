@@ -40,11 +40,11 @@ Exactly two, both outside every decision path:
 
 ## Trust model (out of scope, documented, not defended against)
 
-- Regional identity is assumed independent: an actor controlling
-  multiple logical regions could fabricate recruitment consensus.
-- No Byzantine consensus, no identity attestation between regions, no
-  adversarial node authentication, no real-time guarantees, no
-  distributed transactions across independent deployments.
+- Byzantine consensus, real-time guarantees, and distributed transactions
+  across independent deployments remain out of scope. Node/region authority
+  is enforced for callers using the reviewed runtime and distinct authenticated
+  CockroachDB principals; a stolen DB credential or database superuser remains
+  outside that application-level guarantee.
 
 Consensus dilution (REC-002: foreign live signals enlarge the
 denominator) raises the cost of cherry-picking a target, but it is a
@@ -53,15 +53,11 @@ robustness property, not a Sybil defense.
 The bar is lower than "multiple regions", and honesty demands saying so
 (REDTEAM F-2). Consensus counts each live signal as one voter, so absent
 a per-region cap a SINGLE region could fabricate consensus by emitting
-many signals for one memory — and `emit_signal` takes `origin_region` as
-a parameter validated only for existence (a FK), not for ownership, so
-one actor can emit under any existing region's label. Two partial fixes:
-(1) the `one_live_signal_per_region` partial unique index now caps a
-region at one live signal per memory, so self-flooding a single region no
-longer works (the denominator counts regions, not rows); (2) binding
-`origin_region` to the emitting node's identity — the actual Sybil-shaped
-gap — remains deferred to the identity phase, documented here rather than
-defended against.
+many signals for one memory. `emit_signal` now requires the authenticated node
+to hold an active `SIGNAL` capability for `origin_region`; the one-live-signal
+index remains the independent anti-flood guard. This is not Byzantine
+consensus: distinct compromised credentials can still represent distinct
+legitimate regions.
 
 ## Deferred to Phase 2
 

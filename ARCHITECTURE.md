@@ -96,9 +96,10 @@ a quiet patch.
 
 ## Known limitations (to be expanded in KNOWN_LIMITATIONS.md)
 
-- Regional identity is assumed independent. An actor controlling multiple
-  logical regions could fabricate artificial consensus. Out of scope for
-  hackathon timeline; documented, not defended against.
+- Regional signals are bound to authenticated node principals and explicit
+  regional capabilities. Byzantine consensus remains out of scope: multiple
+  independently compromised credentials can still represent multiple legitimate
+  regions. See `AUTHORITY_MODEL.md`.
 - `recruitment_signals` decay uses `exp()` over floats — a deliberate,
   documented departure from the zero-float decision-path discipline used in
   VIGÍA. Justified because this is a biological heuristic affecting

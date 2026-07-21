@@ -134,6 +134,12 @@ Each item states what must be pinned, and which audit finding demands it.
       repeated invocations converge to drained=true.
 - [ ] **Cold start fails fast.** Deploy without STIGMERGY_NODE_ID: the
       first invocation errors with our message, before touching the DB.
+- [ ] **Authority is principal-bound.** Register `node-a` to one CockroachDB
+      principal and grant `SIGNAL` for `region-a`. Connect as another principal
+      and call `emit_signal(node_id="node-a", origin_region="region-a", ...)`:
+      it must fail with `NodePrincipalMismatch`. Revoke `node-a`, then retry
+      store, reinforce, emit, and resolve: every operation must fail with
+      `NodeRevoked`; verify the administrator chain afterwards.
 - [ ] **Warm connection reuse.** Consecutive invocations reuse the
       module-global connection; a dropped connection re-establishes
       instead of erroring the invocation.
