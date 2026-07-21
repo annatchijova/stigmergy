@@ -51,7 +51,7 @@ from fractions import Fraction
 
 from audit.canonical import quantize
 from audit.chain import append_event
-from .authority import require_region_capability
+from .authority import require_active_node, require_region_capability
 
 # Reinforcement step: c' = c + (1 - c) * ALPHA. Exact rational constant —
 # deterministic, monotone, bounded in [0,1), fixed point at exactly 1.
@@ -282,6 +282,9 @@ def recall(
     _require_provider(provider)
     if limit < 1:
         raise ValueError("limit must be >= 1")
+    # Recall updates access metadata and can rediscover an ORPHANED memory;
+    # it is therefore a mutation boundary even when it returns no hits.
+    require_active_node(cur, node_id=node_id)
     vector = provider.embed(query_text)
     from embeddings.base import to_pgvector_literal
     literal = to_pgvector_literal(vector)
