@@ -83,6 +83,33 @@ transition, and audit event distinct. AWS controls *which process may read a
 secret*; CockroachDB proves *which principal connected*; STIGMERGY proves
 *which node and operation that principal may represent*.
 
+## Changefeed ingress is authenticated
+
+CockroachDB's webhook sink needs an HTTPS-reachable resolver endpoint. The
+resolver must never be an anonymously callable operational trigger. Configure
+a high-entropy `STIGMERGY_CHANGEFEED_TOKEN` in the resolver's dedicated AWS
+secret and add the same value to the changefeed using CockroachDB's
+[`extra_headers` option](https://www.cockroachlabs.com/docs/stable/create-changefeed.html):
+
+```sql
+CREATE CHANGEFEED FOR TABLE recruitment_signals
+  INTO 'webhook-https://resolver.example.invalid'
+  WITH updated, resolved = '30s',
+       extra_headers = '{"x-stigmergy-changefeed-token":"<secret>"}';
+```
+
+The Lambda compares that header in constant time before it parses the body or
+opens a CockroachDB connection. A missing or wrong token receives `401`; it
+cannot cause a resolution attempt. TLS verification remains required. If a
+deployment uses a private API gateway or mutual TLS instead, retain this
+application-level check unless an equivalent, tested identity assertion reaches
+the handler.
+
+Treat the header as a credential: restrict who can inspect or alter the
+changefeed job, rotate it by replacing the secret and updating/recreating the
+job in a controlled change, and never paste it into a repository or a sink URI
+that is broadly readable.
+
 ## CockroachDB tooling boundary
 
 When the CockroachDB Managed MCP Server is enabled, retain its safe read-only

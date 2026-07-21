@@ -19,7 +19,11 @@ from lambdas.common import (
 )
 import lambdas.changefeed_resolver as resolver_lambda
 import lambdas.cron_sweeper as sweeper_lambda
-from lambdas.changefeed_resolver import ParsedBatch, parse_changefeed_envelope
+from lambdas.changefeed_resolver import (
+    ParsedBatch,
+    changefeed_request_is_authenticated,
+    parse_changefeed_envelope,
+)
 
 failures = []
 
@@ -205,14 +209,19 @@ def t_deployment_authority_binds_identity_and_optional_global_capability():
 
 def t_resolver_heartbeat_validates_deployment_identity():
     old_node = os.environ.get("STIGMERGY_NODE_ID")
+    old_token = os.environ.get("STIGMERGY_CHANGEFEED_TOKEN")
     old_connection = resolver_lambda.get_connection
     old_authority = resolver_lambda.require_deployment_authority
     calls = []
     try:
         os.environ["STIGMERGY_NODE_ID"] = "resolver-node"
+        os.environ["STIGMERGY_CHANGEFEED_TOKEN"] = "test-changefeed-token"
         resolver_lambda.get_connection = lambda: "resolver-connection"
         resolver_lambda.require_deployment_authority = lambda conn, node: calls.append((conn, node))
-        result = resolver_lambda.handler({"resolved": "1700000000.0"})
+        result = resolver_lambda.handler({
+            "headers": {"X-STIGMERGY-CHANGEFEED-TOKEN": "test-changefeed-token"},
+            "resolved": "1700000000.0",
+        })
         assert result["statusCode"] == 200
         assert calls == [("resolver-connection", "resolver-node")]
     finally:
@@ -222,6 +231,48 @@ def t_resolver_heartbeat_validates_deployment_identity():
             os.environ.pop("STIGMERGY_NODE_ID", None)
         else:
             os.environ["STIGMERGY_NODE_ID"] = old_node
+        if old_token is None:
+            os.environ.pop("STIGMERGY_CHANGEFEED_TOKEN", None)
+        else:
+            os.environ["STIGMERGY_CHANGEFEED_TOKEN"] = old_token
+
+def t_changefeed_ingress_requires_exact_configured_token():
+    old_token = os.environ.get("STIGMERGY_CHANGEFEED_TOKEN")
+    try:
+        os.environ["STIGMERGY_CHANGEFEED_TOKEN"] = "s3cret"
+        assert changefeed_request_is_authenticated({
+            "headers": {"x-stigmergy-changefeed-token": "s3cret"}
+        })
+        assert changefeed_request_is_authenticated({
+            "headers": {"X-Stigmergy-Changefeed-Token": "s3cret"}
+        })
+        assert not changefeed_request_is_authenticated({"headers": {}})
+        assert not changefeed_request_is_authenticated({
+            "headers": {"x-stigmergy-changefeed-token": "s3cret-plus"}
+        })
+        assert not changefeed_request_is_authenticated({"resolved": "t"})
+    finally:
+        if old_token is None:
+            os.environ.pop("STIGMERGY_CHANGEFEED_TOKEN", None)
+        else:
+            os.environ["STIGMERGY_CHANGEFEED_TOKEN"] = old_token
+
+def t_unauthenticated_changefeed_request_never_connects():
+    old_token = os.environ.get("STIGMERGY_CHANGEFEED_TOKEN")
+    old_connection = resolver_lambda.get_connection
+    try:
+        os.environ["STIGMERGY_CHANGEFEED_TOKEN"] = "s3cret"
+        resolver_lambda.get_connection = lambda: (_ for _ in ()).throw(
+            AssertionError("unauthenticated request touched database")
+        )
+        result = resolver_lambda.handler({"headers": {}, "resolved": "t"})
+        assert result["statusCode"] == 401
+    finally:
+        resolver_lambda.get_connection = old_connection
+        if old_token is None:
+            os.environ.pop("STIGMERGY_CHANGEFEED_TOKEN", None)
+        else:
+            os.environ["STIGMERGY_CHANGEFEED_TOKEN"] = old_token
 
 def t_sweeper_requires_maintain_before_empty_drain():
     old_node = os.environ.get("STIGMERGY_NODE_ID")

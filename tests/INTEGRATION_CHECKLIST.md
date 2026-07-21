@@ -134,6 +134,11 @@ Each item states what must be pinned, and which audit finding demands it.
       repeated invocations converge to drained=true.
 - [ ] **Cold start fails fast.** Deploy without STIGMERGY_NODE_ID: the
       first invocation errors with our message, before touching the DB.
+- [ ] **Webhook ingress rejects before work.** Invoke the resolver Function
+      URL without or with the wrong `x-stigmergy-changefeed-token`: it returns
+      401 and creates no CockroachDB connection/audit event. Configure the
+      matching CockroachDB `extra_headers` token and confirm a real changefeed
+      delivery succeeds over TLS.
 - [ ] **Deployment identity is live, not declarative.** Invoke each Lambda
       with a valid `STIGMERGY_NODE_ID` but another service account's DSN:
       resolver heartbeat and sweeper invocation both fail with

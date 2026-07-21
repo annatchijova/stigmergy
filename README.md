@@ -121,12 +121,18 @@ prove that the authenticated CockroachDB principal owns that node; the sweeper
 also proves `MAINTAIN` before it can report an empty successful sweep. A
 mispointed secret therefore fails closed instead of looking healthy.
 
+The public resolver additionally requires `STIGMERGY_CHANGEFEED_TOKEN`. Put it
+in the resolver's separate secret and configure the same value as CockroachDB
+changefeed `extra_headers`; requests without the exact header receive `401`
+before parsing or opening a database connection.
+
 **Changefeed resolver** (`lambdas/changefeed_resolver.py:handler`) —
 point a webhook-sink changefeed at its function URL:
 
     CREATE CHANGEFEED FOR TABLE recruitment_signals
       INTO 'webhook-https://<function-url>'
-      WITH updated, resolved = '30s';
+      WITH updated, resolved = '30s',
+           extra_headers = '{"x-stigmergy-changefeed-token":"<secret>"}';
 
 At-least-once delivery is safe: resolution is idempotent through the
 state machine. Expected outcomes ACK; unexpected failures 500 (the sink

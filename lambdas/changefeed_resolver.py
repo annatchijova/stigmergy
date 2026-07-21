@@ -41,7 +41,9 @@ Delivery semantics, and why they are safe:
 
 from __future__ import annotations
 
+import hmac
 import json
+import os
 from dataclasses import dataclass
 
 from audit.chain import run_in_transaction
@@ -49,6 +51,46 @@ from ops.recruitment import (
     CooldownActive, RegionUnavailable, resolve_recruitment,
 )
 from .common import get_connection, require_deployment_authority, require_node_id
+
+
+_CHANGEFEED_TOKEN_HEADER = "x-stigmergy-changefeed-token"
+
+
+def _configured_changefeed_token() -> str:
+    """Read the resolver's ingress secret without accepting an empty value."""
+    token = os.environ.get("STIGMERGY_CHANGEFEED_TOKEN", "")
+    if not token:
+        raise RuntimeError(
+            "STIGMERGY_CHANGEFEED_TOKEN is required for the public changefeed "
+            "ingress; refusing an unauthenticated resolver deployment."
+        )
+    return token
+
+
+def changefeed_request_is_authenticated(event) -> bool:
+    """Verify CockroachDB's configured extra header before touching the DB.
+
+    Function URL/API Gateway header casing is not stable, so normalize keys.
+    ``compare_digest`` avoids a token-prefix timing oracle at this public
+    ingress boundary. A direct invocation without HTTP headers is deliberately
+    not a production-compatible resolver call.
+    """
+    token = _configured_changefeed_token()
+    if not isinstance(event, dict):
+        return False
+    headers = event.get("headers")
+    if not isinstance(headers, dict):
+        return False
+    presented = next(
+        (
+            value for key, value in headers.items()
+            if isinstance(key, str)
+            and key.lower() == _CHANGEFEED_TOKEN_HEADER
+            and isinstance(value, str)
+        ),
+        None,
+    )
+    return presented is not None and hmac.compare_digest(presented, token)
 
 
 @dataclass(frozen=True)
@@ -157,6 +199,12 @@ def _attempt(conn, node_id: str, attempt: ResolutionAttempt) -> str:
 
 
 def handler(event, context=None):
+    # This endpoint must be reachable by CockroachDB's HTTPS webhook, not by
+    # arbitrary callers. Reject before parsing or connecting so an unauthenticated
+    # request cannot consume database work or trigger a resolution attempt.
+    if not changefeed_request_is_authenticated(event):
+        return {"statusCode": 401, "body": json.dumps({"error": "unauthorized changefeed ingress"})}
+
     node_id = require_node_id()
 
     # Function-URL / API-Gateway invocations wrap the sink's JSON in a

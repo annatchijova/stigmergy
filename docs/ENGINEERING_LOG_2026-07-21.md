@@ -75,6 +75,17 @@ cannot update an existing agent's controller state.
   query. Invalid time input is now rejected before opening a cursor operation,
   preserving the public boundary contract exercised by its pure test.
 
+### Changefeed ingress boundary
+
+- Verified against CockroachDB's current official changefeed documentation
+  that webhook sinks support `extra_headers`.
+- Added a required resolver-only `STIGMERGY_CHANGEFEED_TOKEN`, normalized
+  case-insensitive header lookup, and constant-time comparison before JSON
+  parsing or database connection. A public endpoint without the matching
+  CockroachDB-supplied header returns `401` and cannot trigger resolution.
+- Documented rotation and job-inspection exposure as operational requirements;
+  this is a shared secret boundary, not a claim of AWS IAM authentication.
+
 ## Evidence
 
 The executed adversarial experiments are in
