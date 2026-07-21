@@ -26,6 +26,8 @@ capability vocabulary, and the remaining trust boundary.
 
 The executed adversarial evidence is recorded in
 [docs/SECURITY_AUDIT_ROUND_2.md](docs/SECURITY_AUDIT_ROUND_2.md).
+The implementation and reproducibility work is summarized in
+[docs/ENGINEERING_LOG_2026-07-21.md](docs/ENGINEERING_LOG_2026-07-21.md).
 
 ## Layout
 
