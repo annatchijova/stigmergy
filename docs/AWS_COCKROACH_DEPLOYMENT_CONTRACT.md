@@ -113,6 +113,17 @@ changefeed job, rotate it by replacing the secret and updating/recreating the
 job in a controlled change, and never paste it into a repository or a sink URI
 that is broadly readable.
 
+## Observable failure, not a silent HTTP status
+
+The resolver raises a bounded `ChangefeedBatchFailure` after any unexpected
+attempt error. This deliberately turns the Lambda invocation into an AWS
+`Errors` metric and a retryable Function URL failure for CockroachDB. Returning
+an HTTP 500 value from otherwise successful Lambda code would not reliably
+increment the Lambda error metric. The SAM scaffold creates one `Errors` alarm
+per function; an actual deployment must attach its reviewed notification
+destination. Successful resolver and sweeper logs contain only counts and
+state categories, never contents, ids, DSNs, or tokens.
+
 ## CockroachDB tooling boundary
 
 When the CockroachDB Managed MCP Server is enabled, retain its safe read-only

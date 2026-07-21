@@ -58,6 +58,36 @@
         "Environment": {"Variables": {"STIGMERGY_NODE_ID": {"Ref": "SweeperNodeId"}, "STIGMERGY_DSN_SECRET_ARN": {"Ref": "SweeperDsnSecretArn"}}},
         "Events": {"ScheduledSweep": {"Type": "Schedule", "Properties": {"Schedule": {"Ref": "SweepSchedule"}}}}
       }
+    },
+    "ResolverErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "STIGMERGY resolver had one or more unexpected Lambda failures.",
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Dimensions": [{"Name": "FunctionName", "Value": {"Ref": "ResolverFunction"}}],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "SweeperErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "STIGMERGY sweeper had one or more Lambda failures.",
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Dimensions": [{"Name": "FunctionName", "Value": {"Ref": "SweeperFunction"}}],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching"
+      }
     }
   },
   "Outputs": {

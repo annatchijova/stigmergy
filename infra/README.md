@@ -10,6 +10,9 @@ an account is opened.
   application-level CockroachDB changefeed token, not by an open operational
   endpoint.
 - An EventBridge-scheduled sweeper Lambda.
+- CloudWatch `Errors` alarms for each Lambda. They intentionally have no
+  notification target in this account-free scaffold; attach an SNS/PagerDuty
+  action only after deciding who owns the operational response.
 - Separate execution roles and separate Secrets Manager read permissions:
   resolver can read its DSN plus ingress-token secret; sweeper can read only
   its DSN secret.
@@ -59,6 +62,10 @@ function's IAM role and caches them only for the warm process lifetime.
 5. Create the CockroachDB changefeed using the `ResolverFunctionUrl` output
    and its matching `extra_headers` token. Confirm TLS certificate validation;
    do not set `insecure_tls_skip_verify` in a real deployment.
+6. Attach reviewed notification actions to the two CloudWatch alarms. A
+   resolver's unexpected batch failure raises, so it both triggers CockroachDB
+   redelivery and increments the AWS/Lambda `Errors` metric. Normal logs carry
+   counts only, never DSNs, tokens, memory content, or memory ids.
 
 If the CockroachDB endpoint requires private networking, add reviewed VPC,
 security-group, and egress configuration before deployment. The template does

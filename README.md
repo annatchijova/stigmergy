@@ -143,8 +143,9 @@ point a webhook-sink changefeed at its function URL:
            extra_headers = '{"x-stigmergy-changefeed-token":"<secret>"}';
 
 At-least-once delivery is safe: resolution is idempotent through the
-state machine. Expected outcomes ACK; unexpected failures 500 (the sink
-redelivers); malformed entries ACK with a named report so a poison
+state machine. Expected outcomes ACK; unexpected failures fail the Lambda
+invocation (the sink redelivers and CloudWatch counts an error); malformed
+entries ACK with a named report so a poison
 message cannot stall the feed.
 
 **Cron sweeper** (`lambdas/cron_sweeper.py:handler`) — EventBridge

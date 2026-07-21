@@ -29,6 +29,15 @@ def main() -> int:
     assert resolver["FunctionUrlConfig"]["AuthType"] == "NONE"
     assert "ScheduledSweep" in sweeper["Events"]
     assert sweeper["Events"]["ScheduledSweep"]["Type"] == "Schedule"
+    for alarm_name, function_name in (
+        ("ResolverErrorAlarm", "ResolverFunction"),
+        ("SweeperErrorAlarm", "SweeperFunction"),
+    ):
+        alarm = resources[alarm_name]
+        assert alarm["Type"] == "AWS::CloudWatch::Alarm"
+        props = alarm["Properties"]
+        assert props["Namespace"] == "AWS/Lambda" and props["MetricName"] == "Errors"
+        assert props["Dimensions"] == [{"Name": "FunctionName", "Value": {"Ref": function_name}}]
 
     resolver_policy = resources["ResolverRole"]["Properties"]["Policies"][0]["PolicyDocument"]["Statement"]
     resolver_secret_statement = next(s for s in resolver_policy if "secretsmanager:GetSecretValue" in s["Action"])

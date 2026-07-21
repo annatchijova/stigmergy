@@ -21,6 +21,7 @@ from lambdas.common import (
 import lambdas.changefeed_resolver as resolver_lambda
 import lambdas.cron_sweeper as sweeper_lambda
 from lambdas.changefeed_resolver import (
+    ChangefeedBatchFailure,
     ParsedBatch,
     changefeed_request_is_authenticated,
     parse_changefeed_envelope,
@@ -351,6 +352,44 @@ def t_unauthenticated_changefeed_request_never_connects():
         assert result["statusCode"] == 401
     finally:
         resolver_lambda.get_connection = old_connection
+        if old_token is None:
+            os.environ.pop("STIGMERGY_CHANGEFEED_TOKEN", None)
+        else:
+            os.environ["STIGMERGY_CHANGEFEED_TOKEN"] = old_token
+        if old_token_arn is None:
+            os.environ.pop("STIGMERGY_CHANGEFEED_TOKEN_SECRET_ARN", None)
+        else:
+            os.environ["STIGMERGY_CHANGEFEED_TOKEN_SECRET_ARN"] = old_token_arn
+
+def t_unexpected_resolver_attempt_raises_for_cloudwatch_and_redelivery():
+    old_node = os.environ.get("STIGMERGY_NODE_ID")
+    old_token = os.environ.get("STIGMERGY_CHANGEFEED_TOKEN")
+    old_token_arn = os.environ.get("STIGMERGY_CHANGEFEED_TOKEN_SECRET_ARN")
+    old_connection = resolver_lambda.get_connection
+    old_authority = resolver_lambda.require_deployment_authority
+    old_attempt = resolver_lambda._attempt
+    try:
+        os.environ["STIGMERGY_NODE_ID"] = "resolver-node"
+        os.environ["STIGMERGY_CHANGEFEED_TOKEN"] = "s3cret"
+        os.environ.pop("STIGMERGY_CHANGEFEED_TOKEN_SECRET_ARN", None)
+        resolver_lambda.get_connection = lambda: "connection"
+        resolver_lambda.require_deployment_authority = lambda conn, node: None
+        resolver_lambda._attempt = lambda conn, node, attempt: (_ for _ in ()).throw(RuntimeError("db failure"))
+        expect_raises(
+            ChangefeedBatchFailure,
+            lambda: resolver_lambda.handler({
+                "headers": {"x-stigmergy-changefeed-token": "s3cret"},
+                "payload": [entry()],
+            }),
+        )
+    finally:
+        resolver_lambda.get_connection = old_connection
+        resolver_lambda.require_deployment_authority = old_authority
+        resolver_lambda._attempt = old_attempt
+        if old_node is None:
+            os.environ.pop("STIGMERGY_NODE_ID", None)
+        else:
+            os.environ["STIGMERGY_NODE_ID"] = old_node
         if old_token is None:
             os.environ.pop("STIGMERGY_CHANGEFEED_TOKEN", None)
         else:

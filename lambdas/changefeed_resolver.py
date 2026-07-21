@@ -27,7 +27,8 @@ Delivery semantics, and why they are safe:
     CooldownActive, RegionUnavailable, LookupError each classify into
     the summary and the batch still ACKs (200). The system preserved
     uncertainty; there is nothing to retry.
-  - An UNEXPECTED exception marks the batch 500 so the sink redelivers —
+  - An UNEXPECTED exception fails the Lambda invocation so the sink redelivers
+    and CloudWatch counts an AWS/Lambda error —
     safe precisely because attempts are idempotent (above). Each attempt
     runs in ITS OWN transaction (run_in_transaction, 40001 retries
     inside); one failure never rolls back its neighbors.
@@ -58,6 +59,10 @@ from .common import (
 
 
 _CHANGEFEED_TOKEN_HEADER = "x-stigmergy-changefeed-token"
+
+
+class ChangefeedBatchFailure(RuntimeError):
+    """An unexpected per-record failure; let Lambda emit an Errors metric."""
 
 
 def _configured_changefeed_token() -> str:
@@ -175,7 +180,7 @@ def _attempt(conn, node_id: str, attempt: ResolutionAttempt) -> str:
     """
     One resolution attempt, one transaction, classified into a summary
     key. Expected outcomes return; unexpected exceptions propagate to
-    the handler, which answers 500 (redeliver).
+    the handler, which fails the invocation (redeliver + CloudWatch error).
     """
     try:
         outcome = run_in_transaction(
@@ -248,5 +253,26 @@ def handler(event, context=None):
         "malformed": parsed.malformed,   # ACKed but named — the alarm
         "failures": failures,
     }
-    status = 500 if failures else 200
-    return {"statusCode": status, "body": json.dumps(body_out)}
+    # Returning an HTTP 500 from a successfully completed Lambda invocation
+    # does not increment AWS/Lambda Errors. Raise a bounded, secret-free
+    # exception instead: Function URL produces a retryable failure for the
+    # changefeed and CloudWatch sees the operational fault. Details remain in
+    # the response-shaped local result only when the batch succeeded.
+    if failures:
+        print(json.dumps({
+            "event": "CHANGEFEED_BATCH_FAILED",
+            "attempts": len(parsed.attempts),
+            "failure_count": len(failures),
+            "malformed_count": len(parsed.malformed),
+        }, sort_keys=True))
+        raise ChangefeedBatchFailure(
+            f"changefeed batch has {len(failures)} unexpected attempt failure(s)"
+        )
+    print(json.dumps({
+        "event": "CHANGEFEED_BATCH_COMPLETED",
+        "attempts": len(parsed.attempts),
+        "ignored": parsed.ignored,
+        "malformed_count": len(parsed.malformed),
+        "summary": summary,
+    }, sort_keys=True))
+    return {"statusCode": 200, "body": json.dumps(body_out)}

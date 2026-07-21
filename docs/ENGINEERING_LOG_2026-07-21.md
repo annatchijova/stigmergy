@@ -98,6 +98,16 @@ cannot update an existing agent's controller state.
   regression. The scaffold is intentionally not presented as deployed AWS
   evidence; `infra/README.md` records the order that makes it real.
 
+### Lambda observability
+
+- Replaced the resolver's returned-but-successful HTTP 500 path with a bounded
+  raised `ChangefeedBatchFailure`. This makes unexpected batches visible to
+  both CockroachDB redelivery and AWS/Lambda `Errors` rather than merely a
+  response value that CloudWatch may not count as a function failure.
+- Added count-only structured completion/failure logs and one CloudWatch error
+  alarm per Lambda to the SAM scaffold. Notification ownership remains a
+  deployment decision, explicitly not an invented SNS endpoint.
+
 ## Evidence
 
 The executed adversarial experiments are in

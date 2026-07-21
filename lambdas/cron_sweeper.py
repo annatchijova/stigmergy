@@ -85,4 +85,7 @@ def handler(event=None, context=None):
         "window_seconds": int(window.total_seconds()),
         "chunk_size": chunk_size,
     }
+    # Counts only: CloudWatch receives an operational index without memory
+    # content, identifiers, credentials, or the DSN entering the log stream.
+    print(json.dumps({"event": "SWEEP_COMPLETED", **body}, sort_keys=True))
     return {"statusCode": 200, "body": json.dumps(body)}
