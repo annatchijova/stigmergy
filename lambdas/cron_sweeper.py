@@ -34,7 +34,13 @@ from datetime import timedelta
 from audit.chain import run_in_transaction
 from ops.orphans import sweep_orphans
 from ops.recruitment import expire_signals
-from .common import bounded_drain, env_int, get_connection, require_node_id
+from .common import (
+    bounded_drain,
+    env_int,
+    get_connection,
+    require_deployment_authority,
+    require_node_id,
+)
 
 
 def handler(event=None, context=None):
@@ -43,6 +49,9 @@ def handler(event=None, context=None):
     max_chunks = env_int("SWEEP_MAX_CHUNKS", 20)
     window = timedelta(seconds=env_int("ORPHAN_WINDOW_SECONDS", 7 * 24 * 3600))
     conn = get_connection()
+    # Do not report a successful empty sweep unless this deployment's DB
+    # credential owns the node and has the one global maintenance authority.
+    require_deployment_authority(conn, node_id, capability="MAINTAIN")
 
     signals = bounded_drain(
         lambda: run_in_transaction(

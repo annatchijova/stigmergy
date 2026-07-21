@@ -48,7 +48,7 @@ from audit.chain import run_in_transaction
 from ops.recruitment import (
     CooldownActive, RegionUnavailable, resolve_recruitment,
 )
-from .common import get_connection, require_node_id
+from .common import get_connection, require_deployment_authority, require_node_id
 
 
 @dataclass(frozen=True)
@@ -177,7 +177,10 @@ def handler(event, context=None):
                "region_unavailable": 0, "lookup_error": 0,
                "already_there": 0}
     failures: list[str] = []
-    conn = get_connection() if parsed.attempts else None
+    # Validate even a heartbeat/no-op batch.  A valid invocation must never
+    # look healthy if its STIGMERGY_NODE_ID and database service account drift.
+    conn = get_connection()
+    require_deployment_authority(conn, node_id)
 
     for attempt in parsed.attempts:
         try:

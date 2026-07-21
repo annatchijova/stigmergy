@@ -30,3 +30,5 @@ cockroach sql --insecure --host="127.0.0.1:$port" --execute='SELECT 1' >/dev/nul
 cockroach sql --insecure --host="127.0.0.1:$port" < schema.sql >/dev/null
 STIGMERGY_TEST_DSN="postgresql://root@127.0.0.1:$port/stigmergy?sslmode=disable" \
   PYTHONPATH="$repo_dir" python3 tests/test_authority_integration.py
+STIGMERGY_TEST_DSN="postgresql://root@127.0.0.1:$port/stigmergy?sslmode=disable" \
+  PYTHONPATH="$repo_dir" python3 tests/test_lambda_authority_integration.py

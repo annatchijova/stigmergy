@@ -132,15 +132,22 @@ def _require_text(value: str, name: str, *, limit: int = 512) -> str:
 def require_active_node(cur, *, node_id: str) -> NodeIdentity:
     """Bind ``node_id`` to CockroachDB's authenticated current_user.
 
-    ``FOR SHARE`` keeps the node's status stable until the surrounding
-    transaction commits or rolls back: revocation cannot race a later write
-    through a stale read.
+    ``FOR SHARE`` serializes this decision with revocation: a write that has
+    already established ACTIVE authority completes before revocation, or a
+    later attempt sees REVOKED. Do not replace this with a plain serializable
+    read: an induced CockroachDB race demonstrated that a stale authority read
+    plus an unrelated operational write can otherwise both commit.
+
+    CockroachDB requires UPDATE table privilege for ``FOR SHARE``. That is a
+    real residual boundary: runtime database credentials must remain confined
+    to reviewed deployment code; SQL row-level authority is not provided by
+    this schema. See the AWS/Cockroach deployment contract.
     """
     node_id = validate_node_id(node_id)
     cur.execute(
         """
         SELECT db_principal, status
-          FROM agent_nodes
+         FROM agent_nodes
          WHERE node_id = %s
            FOR SHARE
         """,

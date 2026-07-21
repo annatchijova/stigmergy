@@ -134,6 +134,12 @@ Each item states what must be pinned, and which audit finding demands it.
       repeated invocations converge to drained=true.
 - [ ] **Cold start fails fast.** Deploy without STIGMERGY_NODE_ID: the
       first invocation errors with our message, before touching the DB.
+- [ ] **Deployment identity is live, not declarative.** Invoke each Lambda
+      with a valid `STIGMERGY_NODE_ID` but another service account's DSN:
+      resolver heartbeat and sweeper invocation both fail with
+      `NodePrincipalMismatch`, before any operational work. Invoke the
+      sweeper with its own active principal but without `MAINTAIN`: it fails
+      with `RegionCapabilityDenied` even when there is nothing to sweep.
 - [ ] **Authority is principal-bound.** Register `node-a` to one CockroachDB
       principal and grant `SIGNAL` for `region-a`. Connect as another principal
       and call `emit_signal(node_id="node-a", origin_region="region-a", ...)`:

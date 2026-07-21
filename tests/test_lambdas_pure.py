@@ -9,7 +9,16 @@ from __future__ import annotations
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lambdas.common import DrainSummary, bounded_drain, env_int, require_node_id
+import lambdas.common as common
+from lambdas.common import (
+    DrainSummary,
+    bounded_drain,
+    env_int,
+    require_deployment_authority,
+    require_node_id,
+)
+import lambdas.changefeed_resolver as resolver_lambda
+import lambdas.cron_sweeper as sweeper_lambda
 from lambdas.changefeed_resolver import ParsedBatch, parse_changefeed_envelope
 
 failures = []
@@ -164,6 +173,80 @@ def t_env_int_defaults_and_rejects_garbage():
         expect_raises(RuntimeError, lambda: env_int("STIG_TEST_INT", 7))
     finally:
         os.environ.pop("STIG_TEST_INT", None)
+
+def t_deployment_authority_binds_identity_and_optional_global_capability():
+    # Unit-test the Lambda boundary without pretending a mock cursor can prove
+    # current_user.  The real principal-binding path is exercised against a
+    # CockroachDB cluster in the integration checklist.
+    old_runner = common.run_in_transaction
+    old_active = common.require_active_node
+    old_capability = common.require_node_capability
+    calls = []
+    try:
+        common.run_in_transaction = lambda conn, fn: fn("cursor")
+        common.require_active_node = lambda cur, *, node_id: calls.append(
+            ("active", cur, node_id)
+        ) or "identity"
+        common.require_node_capability = lambda cur, *, node_id, capability: calls.append(
+            ("capability", cur, node_id, capability)
+        ) or "capability-identity"
+        assert require_deployment_authority("connection", "resolver-node") == "identity"
+        assert require_deployment_authority(
+            "connection", "sweeper-node", capability="MAINTAIN"
+        ) == "capability-identity"
+        assert calls == [
+            ("active", "cursor", "resolver-node"),
+            ("capability", "cursor", "sweeper-node", "MAINTAIN"),
+        ]
+    finally:
+        common.run_in_transaction = old_runner
+        common.require_active_node = old_active
+        common.require_node_capability = old_capability
+
+def t_resolver_heartbeat_validates_deployment_identity():
+    old_node = os.environ.get("STIGMERGY_NODE_ID")
+    old_connection = resolver_lambda.get_connection
+    old_authority = resolver_lambda.require_deployment_authority
+    calls = []
+    try:
+        os.environ["STIGMERGY_NODE_ID"] = "resolver-node"
+        resolver_lambda.get_connection = lambda: "resolver-connection"
+        resolver_lambda.require_deployment_authority = lambda conn, node: calls.append((conn, node))
+        result = resolver_lambda.handler({"resolved": "1700000000.0"})
+        assert result["statusCode"] == 200
+        assert calls == [("resolver-connection", "resolver-node")]
+    finally:
+        resolver_lambda.get_connection = old_connection
+        resolver_lambda.require_deployment_authority = old_authority
+        if old_node is None:
+            os.environ.pop("STIGMERGY_NODE_ID", None)
+        else:
+            os.environ["STIGMERGY_NODE_ID"] = old_node
+
+def t_sweeper_requires_maintain_before_empty_drain():
+    old_node = os.environ.get("STIGMERGY_NODE_ID")
+    old_connection = sweeper_lambda.get_connection
+    old_authority = sweeper_lambda.require_deployment_authority
+    old_drain = sweeper_lambda.bounded_drain
+    calls = []
+    try:
+        os.environ["STIGMERGY_NODE_ID"] = "sweeper-node"
+        sweeper_lambda.get_connection = lambda: "sweeper-connection"
+        sweeper_lambda.require_deployment_authority = lambda conn, node, *, capability=None: calls.append(
+            (conn, node, capability)
+        )
+        sweeper_lambda.bounded_drain = lambda *args, **kwargs: DrainSummary(1, 0, True)
+        result = sweeper_lambda.handler()
+        assert result["statusCode"] == 200
+        assert calls == [("sweeper-connection", "sweeper-node", "MAINTAIN")]
+    finally:
+        sweeper_lambda.get_connection = old_connection
+        sweeper_lambda.require_deployment_authority = old_authority
+        sweeper_lambda.bounded_drain = old_drain
+        if old_node is None:
+            os.environ.pop("STIGMERGY_NODE_ID", None)
+        else:
+            os.environ["STIGMERGY_NODE_ID"] = old_node
 
 def t_handlers_importable_without_psycopg():
     # the lazy-import discipline, pinned: importing the handler modules

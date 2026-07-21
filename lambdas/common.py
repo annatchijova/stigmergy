@@ -28,6 +28,9 @@ import os
 import re
 from dataclasses import dataclass
 
+from audit.chain import run_in_transaction
+from ops.authority import require_active_node, require_node_capability
+
 _MAX_NODE_ID_LEN = 64
 _NODE_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 
@@ -93,6 +96,33 @@ def get_connection():
     if _conn is None or _conn.closed:
         _conn = psycopg.connect(require_env("STIGMERGY_DSN"), autocommit=False)
     return _conn
+
+
+def require_deployment_authority(conn, node_id: str, *, capability: str | None = None):
+    """Prove that this Lambda's DB credential owns its declared node.
+
+    ``STIGMERGY_NODE_ID`` is deployment configuration, not authentication.
+    This check binds it to CockroachDB's ``current_user`` on every valid
+    invocation, including an otherwise no-op changefeed heartbeat.  A Lambda
+    therefore cannot appear healthy while pointed at the wrong service-account
+    secret.  When a global capability is supplied, prove that too before work
+    begins; regional checks stay beside the operation because their region is
+    input-dependent.
+
+    The check deliberately uses the same transaction runner as state changes:
+    it gets Cockroach serializable-retry behavior and never leaves an open
+    transaction on a warm connection.
+    """
+    if capability is None:
+        return run_in_transaction(
+            conn, lambda cur: require_active_node(cur, node_id=node_id)
+        )
+    return run_in_transaction(
+        conn,
+        lambda cur: require_node_capability(
+            cur, node_id=node_id, capability=capability,
+        ),
+    )
 
 
 @dataclass(frozen=True)

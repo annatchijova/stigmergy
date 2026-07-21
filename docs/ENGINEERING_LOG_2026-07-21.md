@@ -46,6 +46,35 @@ cannot update an existing agent's controller state.
 - Corrected `create_region()` to use `ON CONFLICT DO NOTHING`, preventing an
   expected duplicate seed from aborting a CockroachDB transaction.
 
+### Lambda deployment identity
+
+- Added `require_deployment_authority()` in `lambdas.common`. A valid Lambda
+  invocation now proves its configured node id belongs to the principal behind
+  its actual CockroachDB DSN. A resolver performs this even for a heartbeat or
+  another no-op batch; a sweeper also proves global `MAINTAIN` before it can
+  report an empty successful run.
+- Added `docs/AWS_COCKROACH_DEPLOYMENT_CONTRACT.md`: an explicit mapping from
+  AWS role, secret, CockroachDB service account, node id, and minimum domain
+  capability. It names the provisioning order and residual boundaries rather
+  than implying that an environment variable is authentication.
+- Extended the disposable real-cluster runner with
+  `tests/test_lambda_authority_integration.py`. It creates three different
+  CockroachDB users and confirms principal mismatch and missing `MAINTAIN`
+  fail closed. This is execution evidence, not a mock claim.
+- The real Lambda test exposed a privilege-design conflict: CockroachDB
+  requires `UPDATE` privilege for `SELECT … FOR SHARE`. A proposed replacement
+  with plain serializable reads was **falsified by induction**: after a writer
+  read ACTIVE, a revocation could commit and the writer could still commit an
+  unrelated operational update. The authority locks remain. The regression now
+  proves their linear order: an already-authorized writer finishes, revocation
+  then commits, and every later writer sees `NodeRevoked`. The required SQL
+  `UPDATE` privilege over authority tables is documented as a residual
+  credential/code-confinement boundary rather than misrepresented as
+  least-privilege row protection.
+- Moved `sweep_orphans()` naive-timestamp validation ahead of its authority
+  query. Invalid time input is now rejected before opening a cursor operation,
+  preserving the public boundary contract exercised by its pure test.
+
 ## Evidence
 
 The executed adversarial experiments are in

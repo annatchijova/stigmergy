@@ -27,6 +27,7 @@ reinforcement/migration, and authority-revocation rollback.
 | R2-07 | Grant/revoke race | Concurrent `SIGNAL` grant and node revocation ended with the node `REVOKED`, no residual capability row, and the grant rejected as `NodeRevoked`. |
 | R2-08 | In-flight write/revoke race | CockroachDB retried the writer after revocation; its renewed authority check raised `NodeRevoked`. No `MEMORY_STORED` event was committed after `NODE_REVOKED`. |
 | R2-09 | Ordinary grant after revocation | Granting `MAINTAIN` to a revoked node raised `NodeRevoked`; the target retained zero capabilities. Ordinary grants cannot silently reactivate a node. |
+| R2-10 | Plain-read replacement for authority locks | **FALSIFIED:** after an ACTIVE read, revocation committed and an unrelated writer update also committed. `FOR SHARE` locks remain; an induced lock-order test confirms pre-revocation work finishes before revocation and later work sees `NodeRevoked`. |
 
 ## What changed
 
@@ -54,6 +55,8 @@ per-node chains plus a verified Merkle ledger.
 ## Boundary / remaining work
 
 This is not Byzantine consensus, credential-theft resistance, or a CockroachDB
-superuser defense. Cloud deployment still needs distinct service accounts,
-least-privilege grants, credential rotation, AWS execution identities, and the
-same integration suite against CockroachDB Cloud.
+superuser defense. CockroachDB also requires UPDATE privilege for the
+authority `FOR SHARE` locks, so runtime credentials must be confined to
+reviewed code; this is not row-level SQL authorization. Cloud deployment still
+needs distinct service accounts, credential rotation, AWS execution identities,
+and the same integration suite against CockroachDB Cloud.

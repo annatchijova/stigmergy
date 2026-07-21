@@ -171,10 +171,13 @@ def sweep_orphans(
     _validate_window(window)
     _validate_limit(limit)
     states = _validate_states(eligible_states)
-    require_node_capability(cur, node_id=node_id, capability="MAINTAIN")
     if now is not None and now.tzinfo is None:
         raise ValueError("now must be timezone-aware UTC — naive datetimes "
                          "do not enter the audit chain.")
+    # All caller-controlled argument validation happens before the authority
+    # query. Besides producing the right error, this keeps invalid temporal
+    # input from touching a transaction at all.
+    require_node_capability(cur, node_id=node_id, capability="MAINTAIN")
     now = now or datetime.now(timezone.utc)
     cutoff = now - window
 

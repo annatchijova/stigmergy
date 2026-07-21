@@ -23,6 +23,8 @@ maintenance merely by naming its old node id.
 Read [AUTHORITY_MODEL.md](AUTHORITY_MODEL.md) before deploying mutable agents:
 it covers trusted bootstrap, least-privilege principals per Lambda/agent, the
 capability vocabulary, and the remaining trust boundary.
+For the concrete AWS Lambda ↔ CockroachDB service-account mapping, read
+[docs/AWS_COCKROACH_DEPLOYMENT_CONTRACT.md](docs/AWS_COCKROACH_DEPLOYMENT_CONTRACT.md).
 
 The executed adversarial evidence is recorded in
 [docs/SECURITY_AUDIT_ROUND_2.md](docs/SECURITY_AUDIT_ROUND_2.md).
@@ -114,7 +116,10 @@ changefeed Lambda so the demo runs on a laptop without AWS.
 ## Deploying the Lambdas
 
 Both require env: `STIGMERGY_NODE_ID` (a Lambda IS a node; identity is
-deployment configuration) and `STIGMERGY_DSN`.
+deployment configuration) and `STIGMERGY_DSN`. On every valid invocation they
+prove that the authenticated CockroachDB principal owns that node; the sweeper
+also proves `MAINTAIN` before it can report an empty successful sweep. A
+mispointed secret therefore fails closed instead of looking healthy.
 
 **Changefeed resolver** (`lambdas/changefeed_resolver.py:handler`) —
 point a webhook-sink changefeed at its function URL:
