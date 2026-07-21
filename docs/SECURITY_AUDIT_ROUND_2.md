@@ -25,6 +25,7 @@ reinforcement/migration, and authority-revocation rollback.
 | R2-05 | Concurrent migration | Two resolvers racing for one memory produced one migration, one named `ValueError` because it was already at the target, exactly one `MEMORY_MIGRATED`, and a valid chain. |
 | R2-06 | Failure during revocation seal | Injecting an exception at `NODE_REVOKED` sealing left node and capability `ACTIVE`, administrator chain length `0`, and chain valid. No partial revocation committed. |
 | R2-07 | Grant/revoke race | Concurrent `SIGNAL` grant and node revocation ended with the node `REVOKED`, no residual capability row, and the grant rejected as `NodeRevoked`. |
+| R2-08 | In-flight write/revoke race | CockroachDB retried the writer after revocation; its renewed authority check raised `NodeRevoked`. No `MEMORY_STORED` event was committed after `NODE_REVOKED`. |
 
 ## What changed
 
