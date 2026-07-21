@@ -21,6 +21,11 @@ CockroachDB `current_user` equals the registered `db_principal` before a
 write. A `REVOKED` node cannot store, reinforce, signal, resolve, create a
 region, or run maintenance.
 
+The roaming/dwelling controller follows the same rule: its first
+`observe()` records `owner_node_id`, and later observations from any other
+authenticated node are rejected. An active node may not steer another
+agent's search state merely by naming its `agent_id`.
+
 ## Capabilities
 
 Regional: `STORE`, `REINFORCE`, `SIGNAL`, `RESOLVE`, `OBSERVE`.
