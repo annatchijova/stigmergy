@@ -119,7 +119,8 @@ CREATE TABLE agent_nodes (
 CREATE TABLE node_capabilities (
     node_id               STRING NOT NULL REFERENCES agent_nodes(node_id),
     capability            STRING NOT NULL CHECK (capability IN (
-                              'MAINTAIN', 'REGION_ADMIN', 'AUTHORITY_ADMIN'
+                              'MAINTAIN', 'REGION_ADMIN', 'AUTHORITY_ADMIN',
+                              'RECALL_GLOBAL'
                           )),
     status                STRING NOT NULL DEFAULT 'ACTIVE'
                               CHECK (status IN ('ACTIVE', 'REVOKED')),

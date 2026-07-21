@@ -51,7 +51,7 @@ from fractions import Fraction
 
 from audit.canonical import quantize
 from audit.chain import append_event
-from .authority import require_active_node, require_region_capability
+from .authority import require_node_capability, require_region_capability
 
 # Reinforcement step: c' = c + (1 - c) * ALPHA. Exact rational constant —
 # deterministic, monotone, bounded in [0,1), fixed point at exactly 1.
@@ -283,8 +283,15 @@ def recall(
     if limit < 1:
         raise ValueError("limit must be >= 1")
     # Recall updates access metadata and can rediscover an ORPHANED memory;
-    # it is therefore a mutation boundary even when it returns no hits.
-    require_active_node(cur, node_id=node_id)
+    # it is therefore a mutation boundary even when it returns no hits. A
+    # dwelling recall is region-scoped; roaming across every region is an
+    # intentionally rarer global capability.
+    if region_id is None:
+        require_node_capability(cur, node_id=node_id, capability="RECALL_GLOBAL")
+    else:
+        require_region_capability(
+            cur, node_id=node_id, region_id=region_id, capability="OBSERVE"
+        )
     vector = provider.embed(query_text)
     from embeddings.base import to_pgvector_literal
     literal = to_pgvector_literal(vector)

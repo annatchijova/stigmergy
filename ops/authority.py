@@ -41,6 +41,7 @@ VALID_NODE_CAPABILITIES = frozenset({
     "MAINTAIN",
     "REGION_ADMIN",
     "AUTHORITY_ADMIN",
+    "RECALL_GLOBAL",
 })
 
 

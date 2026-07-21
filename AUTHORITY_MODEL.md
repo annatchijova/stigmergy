@@ -28,9 +28,11 @@ agent's search state merely by naming its `agent_id`.
 
 ## Capabilities
 
-Regional: `STORE`, `REINFORCE`, `SIGNAL`, `RESOLVE`, `OBSERVE`.
+Regional: `STORE`, `REINFORCE`, `SIGNAL`, `RESOLVE`, `OBSERVE`. A recall in
+one region needs `OBSERVE` there.
 
-Global: `MAINTAIN`, `REGION_ADMIN`, and `AUTHORITY_ADMIN`. The last also
+Global: `MAINTAIN`, `REGION_ADMIN`, `RECALL_GLOBAL`, and `AUTHORITY_ADMIN`.
+Roaming recall across all regions needs `RECALL_GLOBAL`; the last also
 requires its database principal to appear in `authority_administrators`.
 All grants and revocations are sealed into the administrator node's chain.
 
