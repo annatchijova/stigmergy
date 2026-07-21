@@ -24,6 +24,9 @@ Read [AUTHORITY_MODEL.md](AUTHORITY_MODEL.md) before deploying mutable agents:
 it covers trusted bootstrap, least-privilege principals per Lambda/agent, the
 capability vocabulary, and the remaining trust boundary.
 
+The executed adversarial evidence is recorded in
+[docs/SECURITY_AUDIT_ROUND_2.md](docs/SECURITY_AUDIT_ROUND_2.md).
+
 ## Layout
 
     audit/        canonical JSON + quantization, per-node hash chains,
