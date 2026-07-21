@@ -85,6 +85,57 @@ CREATE TABLE memory_regions (
 );
 
 -- -----------------------------------------------------------------------------
+-- agent_nodes / node_region_capabilities — authority for distributed writers.
+--
+-- An audit ``node_id`` is not an identity credential.  Every mutable operation
+-- must bind it to CockroachDB's authenticated ``current_user`` and, when it
+-- acts for a region, to one explicit live capability.  This stops a valid
+-- ledger from faithfully recording an unauthorized claim over another region.
+--
+-- Bootstrap authority_administrators out of band with CockroachDB RBAC.  In
+-- production, give each agent or Lambda role a distinct least-privilege DB
+-- principal; never share one application principal across independently
+-- trusted nodes.
+-- -----------------------------------------------------------------------------
+CREATE TABLE authority_administrators (
+    db_principal          STRING PRIMARY KEY,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE agent_nodes (
+    node_id               STRING PRIMARY KEY,
+    db_principal          STRING NOT NULL UNIQUE,
+    status                STRING NOT NULL DEFAULT 'ACTIVE'
+                              CHECK (status IN ('ACTIVE', 'REVOKED')),
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    revoked_at            TIMESTAMPTZ,
+    revoke_reason         STRING,
+    CHECK (
+        (status = 'ACTIVE'  AND revoked_at IS NULL AND revoke_reason IS NULL)
+     OR (status = 'REVOKED' AND revoked_at IS NOT NULL AND revoke_reason IS NOT NULL)
+    )
+);
+
+CREATE TABLE node_region_capabilities (
+    node_id               STRING NOT NULL REFERENCES agent_nodes(node_id),
+    region_id             STRING NOT NULL REFERENCES memory_regions(region_id),
+    capability            STRING NOT NULL CHECK (capability IN (
+                              'STORE', 'REINFORCE', 'SIGNAL', 'RESOLVE',
+                              'OBSERVE', 'REGION_ADMIN'
+                          )),
+    status                STRING NOT NULL DEFAULT 'ACTIVE'
+                              CHECK (status IN ('ACTIVE', 'REVOKED')),
+    granted_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    revoked_at            TIMESTAMPTZ,
+    revoke_reason         STRING,
+    PRIMARY KEY (node_id, region_id, capability),
+    CHECK (
+        (status = 'ACTIVE'  AND revoked_at IS NULL AND revoke_reason IS NULL)
+     OR (status = 'REVOKED' AND revoked_at IS NOT NULL AND revoke_reason IS NOT NULL)
+    )
+);
+
+-- -----------------------------------------------------------------------------
 -- memories — the episodic memory store.
 -- last_accessed_at / last_reinforced_at / last_migrated_at are written
 -- explicitly by the application inside the same transaction as their
