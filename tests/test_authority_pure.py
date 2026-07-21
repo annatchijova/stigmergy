@@ -57,7 +57,7 @@ def t_capabilities_are_a_closed_vocabulary():
 
 def t_global_capabilities_are_separate_and_closed():
     assert validate_node_capability("MAINTAIN") == "MAINTAIN"
-    assert "REGION_ADMIN" in VALID_NODE_CAPABILITIES
+    assert "AUTHORITY_ADMIN" in VALID_NODE_CAPABILITIES
     for bad in ("STORE", "ROOT", "", None):
         expect_raises(ValueError, lambda bad=bad: validate_node_capability(bad))
 

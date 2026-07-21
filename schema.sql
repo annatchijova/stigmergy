@@ -119,7 +119,7 @@ CREATE TABLE agent_nodes (
 CREATE TABLE node_capabilities (
     node_id               STRING NOT NULL REFERENCES agent_nodes(node_id),
     capability            STRING NOT NULL CHECK (capability IN (
-                              'MAINTAIN', 'REGION_ADMIN'
+                              'MAINTAIN', 'REGION_ADMIN', 'AUTHORITY_ADMIN'
                           )),
     status                STRING NOT NULL DEFAULT 'ACTIVE'
                               CHECK (status IN ('ACTIVE', 'REVOKED')),
@@ -138,7 +138,7 @@ CREATE TABLE node_region_capabilities (
     region_id             STRING NOT NULL REFERENCES memory_regions(region_id),
     capability            STRING NOT NULL CHECK (capability IN (
                               'STORE', 'REINFORCE', 'SIGNAL', 'RESOLVE',
-                              'OBSERVE', 'REGION_ADMIN'
+                              'OBSERVE'
                           )),
     status                STRING NOT NULL DEFAULT 'ACTIVE'
                               CHECK (status IN ('ACTIVE', 'REVOKED')),
@@ -257,9 +257,9 @@ CREATE TABLE recruitment_signals (
     -- partial on status='PENDING' so history is untouched (Invariant 8:
     -- EXPIRED/ACCEPTED rows never collide, and a region may re-recruit a
     -- memory once its previous signal has resolved or evaporated).
-    -- NOTE: this hardens self-flooding only. Binding origin_region to the
-    -- emitting node's identity — so an actor cannot emit under a region it
-    -- does not own — is deferred to the identity phase (KNOWN_LIMITATIONS).
+    -- A signal's origin is later bound to the authenticated emitting node by
+    -- ops.authority.require_region_capability().  The index remains an
+    -- anti-flood control; identity and regional authority are separate.
     UNIQUE INDEX one_live_signal_per_region (memory_id, origin_region)
         WHERE status = 'PENDING',
     INDEX (status, expires_at),

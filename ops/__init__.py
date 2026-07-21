@@ -32,6 +32,20 @@ from .recruitment import (
     resolve_recruitment,
 )
 from .regions import CreatedRegion, RegionExists, create_region
+from .authority import (
+    AdministratorDenied,
+    AuthorityChange,
+    AuthorityError,
+    NodePrincipalMismatch,
+    NodeRegistrationConflict,
+    NodeRevoked,
+    RegionCapabilityDenied,
+    UnknownNode,
+    grant_node_capability,
+    grant_region_capability,
+    register_node,
+    revoke_node,
+)
 
 __all__ = [
     # controller
@@ -48,4 +62,9 @@ __all__ = [
     "expire_signals", "resolve_recruitment",
     # regions
     "CreatedRegion", "RegionExists", "create_region",
+    # authority
+    "AdministratorDenied", "AuthorityChange", "AuthorityError",
+    "NodePrincipalMismatch", "NodeRegistrationConflict", "NodeRevoked",
+    "RegionCapabilityDenied", "UnknownNode", "grant_node_capability",
+    "grant_region_capability", "register_node", "revoke_node",
 ]
