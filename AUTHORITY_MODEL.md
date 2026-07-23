@@ -36,6 +36,24 @@ Roaming recall across all regions needs `RECALL_GLOBAL`; the last also
 requires its database principal to appear in `authority_administrators`.
 All grants and revocations are sealed into the administrator node's chain.
 
+## Custody layer operations (ops.trust)
+
+`ops.trust.quarantine_actor` (flags every memory a node's custody chain
+names — see `ARCHITECTURE.md`'s custody-layer section) is gated with
+`require_authority_administrator`, the SAME tier as `revoke_node` and
+`register_node`: it is system-wide and cross-region, and a taint sweep
+is not designed to be undone in bulk, so it belongs at the highest
+existing tier rather than the bare `AUTHORITY_ADMIN` capability check
+alone.
+
+`ops.trust.quarantine_memory` and `rehabilitate_memory` act on one
+memory and are gated with `require_node_capability(..., "REGION_ADMIN")`
+— matching `ops.regions.create_region`'s existing precedent. Note that
+despite its name `REGION_ADMIN` is a *global* node capability in this
+schema (`VALID_NODE_CAPABILITIES`), not a per-region grant
+(`VALID_REGION_CAPABILITIES`); this port surfaces that existing quirk
+rather than inventing region-scoped semantics that don't exist here.
+
 ## Bootstrap
 
 Bootstrap is deliberately out of band: use a CockroachDB administrator and a

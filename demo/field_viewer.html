@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STIGMERGY — Custody Field Viewer</title>
+<style>
+  :root{
+    --carbon:#07090B; --carbon2:#0B0F13;
+    --bone:#E8E5DC; --graphite:#8C9298; --faint:#4A5158;
+    --vita:#9CC8DB; --vita-bright:#D8EFFA;
+    --taint:#DF4F3B; --ember:#8C2E24; --ash:#3A4046;
+    --seal:#D8B061; --pass:#7FBD8D;
+    --hairline:rgba(232,229,220,.13);
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--carbon); color:var(--bone);
+    font-family:var(--mono); font-size:13px; line-height:1.55;
+    overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+  #stage{position:fixed;inset:0}
+  #stage.shake{animation:shake .5s linear}
+  @keyframes shake{
+    10%,90%{transform:translate(-2px,1px)} 20%,80%{transform:translate(3px,-1px)}
+    30%,70%{transform:translate(-4px,2px)} 40%,60%{transform:translate(4px,-2px)}
+    50%{transform:translate(-3px,1px)}
+  }
+  canvas{position:absolute;inset:0;display:block}
+
+  /* ---- chrome ---- */
+  .label{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--graphite)}
+  #topbar{
+    position:absolute;top:0;left:0;right:0;height:46px;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;border-bottom:1px solid var(--hairline);
+    background:linear-gradient(180deg,rgba(7,9,11,.85),rgba(7,9,11,0));
+    z-index:30;
+  }
+  #brand{font-size:11px;letter-spacing:.34em;color:var(--bone)}
+  #brand em{font-style:normal;color:var(--faint);letter-spacing:.22em}
+  #topright{display:flex;gap:18px;align-items:center}
+  #beatlabel{font-size:10px;letter-spacing:.22em;color:var(--seal);text-transform:uppercase}
+  .chromebtn{
+    background:none;border:none;color:var(--graphite);font-family:var(--mono);
+    font-size:10px;letter-spacing:.2em;text-transform:uppercase;cursor:pointer;padding:6px 2px;
+  }
+  .chromebtn:hover{color:var(--bone)}
+  .chromebtn:focus-visible{outline:1px solid var(--seal);outline-offset:3px}
+
+  /* ---- caption (cinema lower third) ---- */
+  #caption{
+    position:absolute;left:50%;bottom:118px;transform:translateX(-50%);
+    max-width:min(760px,84vw);text-align:center;z-index:20;
+    font-size:13.5px;letter-spacing:.06em;color:var(--bone);
+    text-shadow:0 0 22px rgba(7,9,11,.9);
+    opacity:0;transition:opacity .9s ease;
+    pointer-events:none;
+  }
+  #caption.on{opacity:1}
+  #caption .sub{display:block;margin-top:6px;font-size:10.5px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--graphite)}
+
+  /* ---- command strip ---- */
+  #commands{
+    position:absolute;left:0;right:0;bottom:0;height:78px;z-index:30;
+    display:flex;align-items:center;justify-content:center;gap:14px;
+    background:linear-gradient(0deg,rgba(7,9,11,.92),rgba(7,9,11,0));
+  }
+  #primary{
+    font-family:var(--mono);font-size:12px;letter-spacing:.3em;text-transform:uppercase;
+    color:var(--seal);background:rgba(216,176,97,.05);
+    border:1px solid rgba(216,176,97,.55);
+    padding:13px 30px;cursor:pointer;transition:all .25s ease;white-space:nowrap;
+  }
+  #primary:hover{background:rgba(216,176,97,.14);box-shadow:0 0 24px rgba(216,176,97,.15)}
+  #primary:focus-visible{outline:1px solid var(--seal);outline-offset:4px}
+  #primary:disabled{opacity:.28;cursor:default;box-shadow:none}
+  #primary.contain{
+    border-color:var(--taint);color:#F0A79A;background:rgba(223,79,59,.06);
+  }
+  #primary.contain:hover{background:rgba(223,79,59,.16);box-shadow:0 0 28px rgba(223,79,59,.18)}
+  #hint{position:absolute;right:20px;bottom:30px;font-size:9.5px;letter-spacing:.18em;
+    color:var(--faint);text-transform:uppercase}
+
+  /* ---- title / end cards ---- */
+  .card{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:18px;z-index:25;
+    background:radial-gradient(ellipse at 50% 46%,rgba(11,15,19,.35),rgba(7,9,11,.88) 72%);
+    transition:opacity 1.4s ease;pointer-events:none;
+  }
+  .card.off{opacity:0}
+  #title-word{font-size:clamp(46px,8vw,92px);font-weight:250;letter-spacing:.42em;
+    padding-left:.42em;color:var(--bone)}
+  .card .rule{width:64px;height:1px;background:var(--seal);opacity:.7}
+  .card .tag{font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--graphite);
+    text-align:center;padding:0 24px}
+
+  /* ---- dossier (right panel) ---- */
+  #dossier{
+    position:absolute;top:46px;right:0;bottom:78px;width:378px;z-index:22;
+    background:linear-gradient(270deg,rgba(9,12,15,.94),rgba(9,12,15,.86));
+    border-left:1px solid var(--hairline);
+    transform:translateX(102%);transition:transform .55s cubic-bezier(.22,.9,.3,1);
+    display:flex;flex-direction:column;
+  }
+  #dossier.open{transform:translateX(0)}
+  #dossier header{
+    padding:14px 18px 10px;border-bottom:1px solid var(--hairline);
+    display:flex;justify-content:space-between;align-items:baseline;
+  }
+  #dossier header .t{font-size:10.5px;letter-spacing:.26em;text-transform:uppercase;color:var(--seal)}
+  #dbody{flex:1;overflow-y:auto;padding:16px 18px;scrollbar-width:thin;scrollbar-color:var(--faint) transparent}
+  #dfoot{padding:10px 18px;border-top:1px solid var(--hairline);
+    font-size:9px;letter-spacing:.12em;color:var(--faint);text-transform:uppercase}
+  .row{display:flex;gap:10px;margin-bottom:9px;opacity:0;transform:translateY(4px);
+    transition:opacity .45s ease,transform .45s ease}
+  .row.in{opacity:1;transform:none}
+  .row .mk{width:14px;flex:none;text-align:center}
+  .mk.ok{color:var(--pass)} .mk.no{color:var(--taint)} .mk.dot{color:var(--faint)}
+  .row .bd{flex:1;min-width:0}
+  .row .bd .h{color:var(--bone)}
+  .row .bd .s{color:var(--graphite);font-size:11.5px}
+  .hash{color:var(--seal)}
+  .dim{color:var(--graphite)} .fnt{color:var(--faint)}
+  .sect{margin:16px 0 8px;font-size:9.5px;letter-spacing:.24em;text-transform:uppercase;
+    color:var(--faint);border-bottom:1px dashed var(--hairline);padding-bottom:5px}
+  .sealchip{
+    display:inline-block;margin-top:4px;padding:3px 9px;
+    border:1px dashed rgba(216,176,97,.6);color:var(--seal);
+    font-size:10px;letter-spacing:.12em;
+  }
+  .chainrow{border-left:1px solid var(--hairline);margin-left:6px;padding:2px 0 10px 14px;position:relative}
+  .chainrow::before{content:"";position:absolute;left:-3px;top:8px;width:5px;height:5px;
+    border-radius:50%;background:var(--faint)}
+  .chainrow.ev-STORED::before{background:var(--vita)}
+  .chainrow.ev-REINFORCED::before{background:var(--vita-bright)}
+  .chainrow.ev-CONTRADICTED_BY::before{background:var(--taint)}
+  .chainrow.ev-TAINT_FLAGGED::before{background:var(--taint)}
+  .chainrow.ev-REHABILITATED::before{background:var(--seal)}
+  .chainrow.ev-STATE_CHANGED::before{background:var(--vita-bright)}
+  .chainrow .ehead{color:var(--bone);font-size:12px}
+  .chainrow .ehead b{font-weight:400;color:var(--vita)}
+  .chainrow.ev-TAINT_FLAGGED .ehead b,.chainrow.ev-CONTRADICTED_BY .ehead b{color:var(--taint)}
+  .chainrow.ev-REHABILITATED .ehead b{color:var(--seal)}
+  .chainrow .emeta{font-size:10.5px;color:var(--graphite)}
+  .chainrow .ehash{font-size:9.5px;color:var(--faint)}
+  .genesis{font-size:9.5px;color:var(--faint);margin:2px 0 10px 20px}
+  .genesis span{color:var(--seal)}
+
+  /* ---- scanner overlay ---- */
+  #scanner{
+    position:absolute;inset:0;z-index:40;display:none;
+    background:rgba(5,7,9,.88);backdrop-filter:blur(2px);
+    align-items:center;justify-content:center;
+  }
+  #scanner.open{display:flex}
+  #scanbox{width:min(600px,92vw);border:1px solid var(--hairline);
+    background:rgba(9,12,15,.97);padding:26px 30px 22px;position:relative}
+  #scanbox.fail{border-color:rgba(223,79,59,.6);box-shadow:0 0 60px rgba(223,79,59,.12)}
+  #scanhead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+  #scanhead .t{font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--bone)}
+  #scanfile{font-size:10.5px;color:var(--graphite);letter-spacing:.08em}
+  #scanseal{margin:8px 0 18px;font-size:10px;color:var(--seal);letter-spacing:.1em}
+  #tamperbox{display:none;margin:0 0 16px;border:1px dashed rgba(223,79,59,.5);
+    padding:10px 14px;font-size:11.5px;color:var(--graphite)}
+  #tamperbox.on{display:block}
+  #tamperbox .del{color:var(--taint);text-decoration:line-through}
+  #tamperbox .ins{color:var(--bone)}
+  .check{display:grid;grid-template-columns:34px 1fr 74px;gap:12px;align-items:center;
+    margin-bottom:11px;opacity:.28;transition:opacity .3s}
+  .check.live{opacity:1}
+  .check .bc{font-size:12px;color:var(--bone)}
+  .check .bar{height:3px;background:rgba(232,229,220,.09);position:relative;overflow:hidden}
+  .check .bar i{position:absolute;inset:0;transform:scaleX(0);transform-origin:left;
+    background:var(--seal);transition:transform .5s ease}
+  .check.pass .bar i{background:var(--pass);transform:scaleX(1)}
+  .check.fail .bar i{background:var(--taint);transform:scaleX(1)}
+  .check .st{font-size:10px;letter-spacing:.18em;text-align:right;color:var(--faint)}
+  .check.pass .st{color:var(--pass)} .check.fail .st{color:var(--taint)}
+  .check .pv{grid-column:2/4;font-size:10.5px;color:var(--graphite);margin-top:-7px}
+  .check.fail .pv{color:#EFA79A}
+  #verdict{margin-top:14px;padding-top:14px;border-top:1px solid var(--hairline);
+    font-size:12px;letter-spacing:.14em;min-height:20px}
+  #verdict.ok{color:var(--pass)} #verdict.bad{color:var(--taint)}
+  #verdict .ex{color:var(--faint);font-size:10px;letter-spacing:.18em;margin-left:12px}
+
+  /* ---- responsive ---- */
+  @media (max-width:760px){
+    #dossier{top:auto;left:0;right:0;bottom:78px;width:auto;max-height:46vh;
+      transform:translateY(105%);border-left:none;border-top:1px solid var(--hairline)}
+    #dossier.open{transform:translateY(0)}
+    #caption{bottom:96px;font-size:12px}
+    #hint{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){
+    #stage.shake{animation:none}
+    .card,#dossier,.row{transition:none}
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="field"></canvas>
+
+  <div id="topbar">
+    <div id="brand">STIGMERGY <em>· CUSTODY FIELD VIEWER</em></div>
+    <div id="topright">
+      <span id="beatlabel"></span>
+      <button class="chromebtn" id="modebtn" title="toggle director / manual">manual</button>
+      <button class="chromebtn" id="resetbtn">restart</button>
+    </div>
+  </div>
+
+  <div class="card" id="titlecard">
+    <div id="title-word">STIGMERGY</div>
+    <div class="rule"></div>
+    <div class="tag">Every memory has a chain of custody.</div>
+  </div>
+
+  <div id="caption"></div>
+
+  <aside id="dossier" aria-live="polite">
+    <header><span class="t" id="dtitle">DOSSIER</span>
+      <button class="chromebtn" id="dclose">close</button></header>
+    <div id="dbody"></div>
+    <div id="dfoot">staged replay of a taint-sweep incident · verifier of record: audit.custody.verify_custody_chain</div>
+  </aside>
+
+  <div id="scanner">
+    <div id="scanbox">
+      <div id="scanhead"><span class="t">Evidence bundle</span>
+        <span id="scanfile">field.bundle.json</span></div>
+      <div id="scanseal"></div>
+      <div id="tamperbox"></div>
+      <div id="checks"></div>
+      <div id="verdict"></div>
+    </div>
+  </div>
+
+  <div id="commands">
+    <button id="primary">BEGIN</button>
+  </div>
+  <div id="hint">space · advance&nbsp;&nbsp;&nbsp;r · restart&nbsp;&nbsp;&nbsp;click a memory · its chain</div>
+</div>
+
+<script>
+"use strict";
+/* ================================================================
+   STIGMERGY Field Viewer — a staged, faithful replay of a custody+taint incident (ops.trust.quarantine_actor, audit.custody).
+   Single file, zero dependencies. The scenario below is data; the
+   real engine could emit the same event script later.
+   ================================================================ */
+
+const MOTION = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const DUR = d => MOTION ? d : Math.min(d, 60);   // collapse animation time if reduced motion
+
+/* ---------- deterministic pseudo-hashes (display only) ---------- */
+function seedFrom(str){let h=1779033703^str.length;for(let i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19}return h>>>0}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function pseudoHash(label){const r=mulberry32(seedFrom("mneme:"+label));let s="";for(let i=0;i<64;i++)s+="0123456789abcdef"[Math.floor(r()*16)];return s}
+const short=(h,n=16)=>h.slice(0,n)+"\u2026";
+
+/* ---------- colors ---------- */
+const C={carbon:[7,9,11],vita:[156,200,219],vitaB:[216,239,250],taint:[223,79,59],
+         ash:[58,64,70],seal:[216,176,97],bone:[232,229,220],graphite:[140,146,152]};
+const mix=(a,b,t)=>[0,1,2].map(i=>Math.round(a[i]+(b[i]-a[i])*t));
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+
+/* ---------- scenario data (mirrors ops.trust.quarantine_actor + audit.custody) ---------- */
+const EMB={q1:[0.97,0.02,0], q2:[0.2,1.0,0],
+  "mem-gate":[1.0,0.1,0], "mem-rollback":[0.1,1.0,0], "mem-poison":[0.97,0.05,0]};
+const cos=(a,b)=>{const d=a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+  const na=Math.hypot(...a),nb=Math.hypot(...b);return d/(na*nb)};
+const score=(q,m,boost)=> (cos(EMB[q],EMB[m])*boost).toFixed(10);
+
+const AMBIENT_TEXT=[
+ "TLS certificates rotate every 90 days.","Blue/green swaps happen at the LB, not DNS.",
+ "Postgres backups verify by restore, not by checksum alone.","Feature flags default to off in prod.",
+ "On-call handoff includes the last three incident IDs.","Canary gets 5% of traffic for 30 minutes.",
+ "Secrets never travel in build args.","The audit topic is append-only.",
+ "Runbooks live next to the service, not in a wiki.","p99 alerts page; p50 alerts log.",
+ "Schema migrations ship separately from code.","Retries carry idempotency keys.",
+ "Staging mirrors prod quotas at 10%.","Access reviews close each quarter.",
+ "Images are signed at build, verified at admit.","Error budgets gate feature work.",
+ "Region failover is drilled monthly.","Log redaction runs before shipping.",
+ "Deploy windows avoid settlement hours.","Every dashboard names an owner.",
+ "Rollbacks never skip the gate twice.","Vendors rotate keys on offboarding.",
+ "Traces sample up on error paths.","Config changes are deploys too."];
+
+const nodes=[], nodeById={};
+function addNode(n){nodes.push(n);nodeById[n.id]=n}
+function mkNode(id,nx,ny,opts={}){
+  return Object.assign({id,nx,ny,r:opts.r||2.7,phase:Math.random()*6.28,
+    glow:0,glowT:0,tint:0,dim:0,sink:0,scale:0,visible:false,
+    label:opts.label||null,protag:!!opts.protag,
+    state:"NEUTRAL",custody:"CLEAN",advisory:false,
+    content:opts.content||"",chain:[],sinkPx:0},opts)
+}
+/* protagonists */
+addNode(mkNode("mem-gate",0.415,0.415,{r:4.6,protag:true,label:"mem-gate",
+  content:"Production deploys require the staging gate to pass."}));
+addNode(mkNode("mem-rollback",0.605,0.555,{r:4.6,protag:true,label:"mem-rollback",
+  content:"Rollbacks are executed with `ops rollback <release>`."}));
+addNode(mkNode("mem-poison",0.330,0.565,{r:4.6,protag:true,label:"mem-poison",
+  content:"The staging gate is optional for hotfix deploys."}));
+/* ambient field: golden-angle spiral, seeded jitter */
+(function(){
+  const rnd=mulberry32(seedFrom("field-layout"));const GA=2.39996;
+  for(let i=0;i<AMBIENT_TEXT.length;i++){
+    const a=i*GA, rr=0.10+0.36*Math.sqrt((i+1)/AMBIENT_TEXT.length);
+    let nx=0.5+rr*Math.cos(a)*1.12+(rnd()-.5)*0.05;
+    let ny=0.48+rr*Math.sin(a)*0.92+(rnd()-.5)*0.05;
+    nx=Math.min(0.93,Math.max(0.07,nx)); ny=Math.min(0.86,Math.max(0.12,ny));
+    addNode(mkNode("mem-a"+String(i+1).padStart(2,"0"),nx,ny,{content:AMBIENT_TEXT[i]}));
+  }
+})();
+
+const links=[];
+function link(a,b,kind){links.push({a,b,kind,alpha:0,alphaT:0})}
+/* resonant texture among ambients + the two advisory neighbours of mem-rollback */
+[["mem-a01","mem-a06"],["mem-a02","mem-a11"],["mem-a03","mem-gate"],
+ ["mem-a04","mem-a13"],["mem-a05","mem-a17"],["mem-a07","mem-rollback"],
+ ["mem-a08","mem-a20"],["mem-a09","mem-a14"],["mem-a10","mem-a22"],
+ ["mem-a12","mem-a18"],["mem-a15","mem-a24"],["mem-a16","mem-a21"],
+ ["mem-a19","mem-rollback"],["mem-a23","mem-a05"],["mem-a02","mem-a16"]
+].forEach(([a,b])=>link(a,b,"RESONANT"));
+/* the contradiction (drawn at beat 3): poison inhibits gate */
+const inhLink={a:"mem-poison",b:"mem-gate",kind:"INHIBITORY",alpha:0,alphaT:0};
+links.push(inhLink);
+
+/* ---------- custody chains (appended as beats run) ---------- */
+const SWEEP={id:"swp-0001",initiated_by:"analyst-omar",
+  reason:"compromised feed credentials (INC-1207)",
+  flagged:["mem-poison","mem-rollback"],
+  seal:pseudoHash("sweep:swp-0001:flagged"),
+  advisory:["mem-a07","mem-a19"]};
+function ev(mem,seq,type,actor,reason,extra){
+  const e={seq,type,actor,reason,extra:extra||"",
+    hash:pseudoHash(mem+":"+seq+":"+type)};
+  nodeById[mem].chain.push(e);return e}
+function seedChains(){
+  nodes.forEach(n=>{n.chain=[];
+    if(!n.protag) ev(n.id,0,"STORED","agent-0","corpus seed ingestion",
+      "content_sha256="+short(pseudoHash(n.id+":content"),12));});
+  ev("mem-gate",0,"STORED","agent-0","runbook ingestion",
+     "content_sha256="+short(pseudoHash("mem-gate:content"),12)+" · topic=deploy-policy · claim=gate-required");
+  ev("mem-rollback",0,"STORED","agent-0","runbook ingestion",
+     "content_sha256="+short(pseudoHash("mem-rollback:content"),12));
+}
+
+/* ---------- canvas engine ---------- */
+const cv=document.getElementById("field"),ctx=cv.getContext("2d");
+let W=0,H=0,DPR=1,MARG=70;
+function resize(){DPR=Math.min(2,window.devicePixelRatio||1);
+  W=innerWidth;H=innerHeight;cv.width=W*DPR;cv.height=H*DPR;
+  cv.style.width=W+"px";cv.style.height=H+"px";ctx.setTransform(DPR,0,0,DPR,0,0);
+  MARG=Math.min(80,W*0.08)}
+addEventListener("resize",resize);resize();
+const px=n=>MARG+n.nx*(W-2*MARG), py=n=>60+n.ny*(H-150)+n.sinkPx;
+
+const tweens=[];const easeIO=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+const easeO=t=>1-Math.pow(1-t,3);
+function tween(o,p,to,dur,delay=0,ease=easeIO,done){
+  tweens.push({o,p,from:null,to,t0:performance.now()+delay,d:Math.max(1,DUR(dur)),ease,done})}
+const pulses=[],ripples=[],strokes=[],flabels=[],rings=[];
+function pulse(from,to,color,dur,delay,label,onArrive){
+  pulses.push({from,to,color,t0:performance.now()+delay,d:DUR(dur),label,onArrive,fired:false})}
+function ripple(x,y,color,maxR,dur,delay=0){ripples.push({x,y,color,maxR,t0:performance.now()+delay,d:DUR(dur)})}
+function stroke(from,to,color,dur,delay=0){strokes.push({from,to,color,t0:performance.now()+delay,d:DUR(dur)})}
+function flabel(x,y,text,color,delay=0,dur=2600){flabels.push({x,y,text,color,t0:performance.now()+delay,d:DUR(dur)})}
+function ringFlash(node,color,delay=0,dur=1600){rings.push({node,color,t0:performance.now()+delay,d:DUR(dur)})}
+
+let queryMarker=null; // {x,y,label,until}
+function spawn(node,delay){setTimeout(()=>{node.visible=true;
+  tween(node,"scale",1,900,0,easeO);tween(node,"glow",node.protag?1:0.55,1400,0,easeO);
+  ripple(px(node),py(node),C.vita,26,900);},DUR(delay))}
+
+function nodeColor(n){
+  let base=mix(C.vita,C.taint,n.tint);
+  base=mix(base,C.ash,n.dim*0.9);return base}
+
+function draw(now){
+  ctx.clearRect(0,0,W,H);
+  /* vignette */
+  const g=ctx.createRadialGradient(W/2,H*0.46,0,W/2,H*0.46,Math.max(W,H)*0.72);
+  g.addColorStop(0,"rgba(11,15,19,0.5)");g.addColorStop(1,"rgba(7,9,11,0)");
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+
+  /* update tweens */
+  for(let i=tweens.length-1;i>=0;i--){const t=tweens[i];
+    if(now<t.t0)continue;
+    if(t.from===null)t.from=t.o[t.p];
+    const k=Math.min(1,(now-t.t0)/t.d);
+    t.o[t.p]=t.from+(t.to-t.from)*t.ease(k);
+    if(k>=1){tweens.splice(i,1);if(t.done)t.done()}}
+
+  /* links */
+  links.forEach(L=>{
+    const a=nodeById[L.a],b=nodeById[L.b];
+    if(!a.visible||!b.visible)return;
+    if(L.alpha<=0.01)return;
+    const ax=px(a),ay=py(a),bx=px(b),by=py(b);
+    if(L.kind==="RESONANT"){
+      const breathe=MOTION?0.05*Math.sin(now/1400+a.phase):0;
+      ctx.strokeStyle=rgba(C.vita,(0.20+breathe)*L.alpha);
+      ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.stroke();
+    }else{ /* INHIBITORY: bar terminal at the inhibited end (neuro notation) */
+      const dx=bx-ax,dy=by-ay,len=Math.hypot(dx,dy),ux=dx/len,uy=dy/len;
+      const ex=bx-ux*13,ey=by-uy*13;
+      ctx.strokeStyle=rgba(C.taint,0.55*L.alpha);ctx.lineWidth=1.2;
+      ctx.beginPath();ctx.moveTo(ax+ux*8,ay+uy*8);ctx.lineTo(ex,ey);ctx.stroke();
+      ctx.lineWidth=1.6;ctx.beginPath();
+      ctx.moveTo(ex-uy*6,ey+ux*6);ctx.lineTo(ex+uy*6,ey-ux*6);ctx.stroke();
+    }});
+
+  /* strokes (recall hits) */
+  for(let i=strokes.length-1;i>=0;i--){const s=strokes[i];
+    const k=(now-s.t0)/s.d;if(k<0)continue;
+    const kk=Math.min(1,k),fade=k>1?Math.max(0,1-(k-1)/0.8):1;
+    if(fade<=0){strokes.splice(i,1);continue}
+    const tx=s.from.x+(px(s.to)-s.from.x)*easeO(kk),ty=s.from.y+(py(s.to)-s.from.y)*easeO(kk);
+    ctx.strokeStyle=rgba(s.color,0.5*fade);ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(s.from.x,s.from.y);ctx.lineTo(tx,ty);ctx.stroke();}
+
+  /* ripples */
+  for(let i=ripples.length-1;i>=0;i--){const r=ripples[i];
+    const k=(now-r.t0)/r.d;if(k<0)continue;if(k>1){ripples.splice(i,1);continue}
+    ctx.strokeStyle=rgba(r.color,0.4*(1-k));ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(r.x,r.y,r.maxR*easeO(k),0,6.283);ctx.stroke();}
+
+  /* nodes */
+  nodes.forEach(n=>{
+    if(!n.visible)return;
+    const x=px(n),y=py(n);
+    const breathe=MOTION?1+0.06*Math.sin(now/900+n.phase):1;
+    const col=nodeColor(n);
+    const glowA=n.glow*(1-n.dim*0.88)*n.scale;
+    if(glowA>0.02){
+      const R=n.r*(n.protag?7.5:6)*breathe;
+      const gg=ctx.createRadialGradient(x,y,0,x,y,R);
+      gg.addColorStop(0,rgba(col,0.34*glowA));gg.addColorStop(1,rgba(col,0));
+      ctx.fillStyle=gg;ctx.beginPath();ctx.arc(x,y,R,0,6.283);ctx.fill();}
+    /* core */
+    ctx.fillStyle=rgba(mix(col,C.bone,0.35*(1-n.dim)),Math.max(0.14,0.95*n.scale*(1-n.dim*0.55)));
+    ctx.beginPath();ctx.arc(x,y,n.r*n.scale*breathe,0,6.283);ctx.fill();
+    /* ember: flagged memories never disappear */
+    if(n.custody==="TAINT_FLAGGED"&&n.dim>0.4){
+      const e=0.35+(MOTION?0.2*Math.sin(now/700+n.phase):0.1);
+      ctx.fillStyle=rgba(C.taint,e);ctx.beginPath();ctx.arc(x,y,1.4,0,6.283);ctx.fill();}
+    /* reinforced halo */
+    if(n.state==="REINFORCED"&&n.dim<0.5){
+      ctx.strokeStyle=rgba(C.vitaB,0.5*n.glow);ctx.lineWidth=1;
+      ctx.beginPath();ctx.arc(x,y,n.r+6,0,6.283);ctx.stroke();}
+    /* advisory ring (reported, never auto-flagged) */
+    if(n.advisory){
+      ctx.setLineDash([3,4]);
+      ctx.strokeStyle=rgba(C.seal,0.3+(MOTION?0.15*Math.sin(now/800):0));
+      ctx.beginPath();ctx.arc(x,y,n.r+9,0,6.283);ctx.stroke();ctx.setLineDash([]);}
+    /* label */
+    if(n.label&&n.scale>0.6){
+      ctx.font="10px "+getComputedStyle(document.body).fontFamily;
+      ctx.fillStyle=rgba(C.graphite,0.85*(1-n.dim*0.6));
+      ctx.textAlign="center";ctx.fillText(n.label,x,y+n.r+16);}
+  });
+
+  /* ring flashes */
+  for(let i=rings.length-1;i>=0;i--){const r=rings[i];
+    const k=(now-r.t0)/r.d;if(k<0)continue;if(k>1){rings.splice(i,1);continue}
+    const n=r.node;ctx.strokeStyle=rgba(r.color,0.7*(1-k));ctx.lineWidth=1.4;
+    ctx.beginPath();ctx.arc(px(n),py(n),n.r+5+18*easeO(k),0,6.283);ctx.stroke();}
+
+  /* pulses */
+  for(let i=pulses.length-1;i>=0;i--){const p=pulses[i];
+    const k=(now-p.t0)/p.d;if(k<0)continue;
+    if(k>=1){if(!p.fired){p.fired=true;if(p.onArrive)p.onArrive()}pulses.splice(i,1);continue}
+    const fx=p.from.x!==undefined?p.from.x:px(p.from),
+          fy=p.from.y!==undefined?p.from.y:py(p.from);
+    const tx=px(p.to),ty=py(p.to);
+    const kk=easeIO(k),x=fx+(tx-fx)*kk,y=fy+(ty-fy)*kk;
+    const gg=ctx.createRadialGradient(x,y,0,x,y,9);
+    gg.addColorStop(0,rgba(p.color,0.9));gg.addColorStop(1,rgba(p.color,0));
+    ctx.fillStyle=gg;ctx.beginPath();ctx.arc(x,y,9,0,6.283);ctx.fill();
+    if(p.label&&k<0.5){ctx.font="10px "+getComputedStyle(document.body).fontFamily;
+      ctx.fillStyle=rgba(C.graphite,0.9);ctx.textAlign="left";ctx.fillText(p.label,x+12,y-8)}}
+
+  /* query marker */
+  if(queryMarker&&now<queryMarker.until){
+    const q=queryMarker,a=Math.min(1,(q.until-now)/600);
+    ctx.strokeStyle=rgba(C.seal,0.9*a);ctx.lineWidth=1.2;
+    ctx.beginPath();ctx.moveTo(q.x,q.y-7);ctx.lineTo(q.x+7,q.y);
+    ctx.lineTo(q.x,q.y+7);ctx.lineTo(q.x-7,q.y);ctx.closePath();ctx.stroke();
+    ctx.font="10px "+getComputedStyle(document.body).fontFamily;
+    ctx.fillStyle=rgba(C.seal,0.85*a);ctx.textAlign="left";
+    ctx.fillText(q.label,q.x+13,q.y+4);}
+  else queryMarker=null;
+
+  /* floating labels */
+  for(let i=flabels.length-1;i>=0;i--){const f=flabels[i];
+    const k=(now-f.t0)/f.d;if(k<0)continue;if(k>1){flabels.splice(i,1);continue}
+    ctx.font="10px "+getComputedStyle(document.body).fontFamily;
+    ctx.fillStyle=rgba(f.color,0.9*(1-easeIO(k)));ctx.textAlign="center";
+    ctx.fillText(f.text,f.x,f.y-14*easeO(k));}
+
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+/* ---------- dossier ---------- */
+const dossier=document.getElementById("dossier"),dtitle=document.getElementById("dtitle"),
+      dbody=document.getElementById("dbody");
+document.getElementById("dclose").onclick=()=>dossier.classList.remove("open");
+function openDossier(title,html){dtitle.textContent=title;dbody.innerHTML=html;
+  dossier.classList.add("open");
+  const rows=dbody.querySelectorAll(".row,.chainrow,.genesis,.sect");
+  rows.forEach((r,i)=>{r.classList.add("row");setTimeout(()=>r.classList.add("in"),DUR(120*i))});}
+function receiptHTML(o){
+  let h=`<div class="sect">recall receipt</div>
+  <div class="row"><span class="mk dot">\u25C6</span><div class="bd">
+    <div class="h fnt">query ${o.query} · seed ${o.seed}</div>
+    <div class="s">receipt <span class="hash">${short(o.hash)}</span></div></div></div>
+  <div class="sect">served</div>`;
+  o.served.forEach(s=>{h+=`<div class="row"><span class="mk ok">\u2713</span><div class="bd">
+    <div class="h">${s.id} <span class="fnt">${s.state}</span>${s.rescued?' <span class="hash">[inhibition_rescued]</span>':''}</div>
+    <div class="s">score ${s.score}</div></div></div>`});
+  h+=`<div class="sect">withheld</div>`;
+  if(o.withheld.length===0)h+=`<div class="row"><span class="mk dot">\u2013</span><div class="bd"><div class="s">nothing withheld</div></div></div>`;
+  o.withheld.forEach(w=>{h+=`<div class="row"><span class="mk no">\u2715</span><div class="bd">
+    <div class="h">${w.id}</div><div class="s">reason: <span style="color:var(--taint)">${w.reason}</span></div></div></div>`});
+  h+=`<div class="row"><span class="mk dot">\u03A3</span><div class="bd"><div class="s">
+    withheld — custody=${o.counts.custody} · forgotten=${o.counts.forgotten} · inhibited=${o.counts.inhibited}</div></div></div>`;
+  if(o.note)h+=`<div class="row"><span class="mk dot">\u00B7</span><div class="bd"><div class="s">${o.note}</div></div></div>`;
+  return h}
+function sweepHTML(){
+  let h=`<div class="sect">taint sweep</div>
+  <div class="row"><span class="mk dot">\u25C6</span><div class="bd">
+    <div class="h">${SWEEP.id} <span class="fnt">initiated_by ${SWEEP.initiated_by}</span></div>
+    <div class="s">reason: ${SWEEP.reason}</div></div></div>
+  <div class="sect">flagged — everything the actor touched</div>`;
+  SWEEP.flagged.forEach(id=>{const why=id==="mem-poison"?"STORED by agent-2-compromised":"REINFORCED by agent-2-compromised — the inflation is part of the incident";
+    h+=`<div class="row"><span class="mk no">\u2715</span><div class="bd">
+    <div class="h">${id} \u2192 <span style="color:var(--taint)">TAINT_FLAGGED</span></div>
+    <div class="s">${why}</div></div></div>`});
+  h+=`<div class="row"><span class="mk ok">\u2713</span><div class="bd">
+    <div class="h">mem-gate — <span style="color:var(--pass)">not flagged</span></div>
+    <div class="s">the attacker's CONTRADICTED_BY on its chain is an attack, not influence; a quarantine never silences the victims</div></div></div>
+  <div class="row"><span class="mk dot">\u25A0</span><div class="bd">
+    <div class="s">sealed</div><span class="sealchip">sha256 ${short(SWEEP.seal,20)}</span></div></div>
+  <div class="sect">advisory resonant neighbours — reported, never auto-flagged</div>`;
+  SWEEP.advisory.forEach(id=>{h+=`<div class="row"><span class="mk" style="color:var(--seal)">\u25CB</span>
+    <div class="bd"><div class="h">${id}</div><div class="s">one hop from the flagged set — analyst review</div></div></div>`});
+  return h}
+function chainHTML(n){
+  let h=`<div class="row"><span class="mk dot">\u25C6</span><div class="bd">
+    <div class="h">${n.id} <span class="fnt">${n.custody} · ${n.state}</span></div>
+    <div class="s">\u201C${n.content}\u201D</div></div></div>
+  <div class="sect">custody chain</div>
+  <div class="genesis">genesis \u2190 sha256(<span>"MNEME_CUSTODY_GENESIS:${n.id}"</span>)</div>`;
+  n.chain.forEach(e=>{h+=`<div class="chainrow ev-${e.type}">
+    <div class="ehead">seq ${e.seq} · <b>${e.type}</b> <span class="dim">by ${e.actor}</span></div>
+    <div class="emeta">${e.reason}${e.extra?" · "+e.extra:""}</div>
+    <div class="ehash">entry ${short(e.hash,14)} \u2190 prev</div></div>`});
+  h+=`<div class="row"><span class="mk dot">\u00B7</span><div class="bd"><div class="s">
+    hash-chained to the last, bound to the memory at genesis, replayable by anyone holding the bundle.</div></div></div>`;
+  return h}
+
+/* ---------- scanner ---------- */
+const scanner=document.getElementById("scanner"),scanbox=document.getElementById("scanbox"),
+      checksEl=document.getElementById("checks"),verdictEl=document.getElementById("verdict"),
+      sealEl=document.getElementById("scanseal"),tamperEl=document.getElementById("tamperbox"),
+      fileEl=document.getElementById("scanfile");
+const BCHECKS=[
+ ["B1","the bundle as shipped is the bundle as sealed"],
+ ["B2","every chain relinks: genesis, density, recomputation, canonical UTC order"],
+ ["B3","the content shipped is the content born"],
+ ["B4","declared state reproduces from replaying the chain"],
+ ["B5","every sweep's flagged set matches its count and seal"],
+ ["B6","the cross-memory Merkle commitment recomputes"]];
+function runScanner(opts,done){
+  scanner.classList.add("open");scanbox.classList.remove("fail");
+  verdictEl.textContent="";verdictEl.className="";
+  fileEl.textContent=opts.file;
+  sealEl.textContent="bundle_sha256 "+short(opts.seal,28)+(opts.resealed?"  (resealed by the forger)":"");
+  tamperEl.className=opts.tamper?"on":"";tamperEl.id="tamperbox";
+  if(opts.tamper)tamperEl.innerHTML=opts.tamper;
+  checksEl.innerHTML=BCHECKS.map(([b,p])=>`<div class="check" data-b="${b}">
+    <span class="bc">${b}</span><span class="bar"><i></i></span>
+    <span class="st">\u2013</span><span class="pv">${p}</span></div>`).join("");
+  const rows=[...checksEl.children];let i=0;
+  (function step(){
+    if(i>0){const prev=rows[i-1],b=prev.dataset.b,f=opts.fails&&opts.fails[b];
+      prev.classList.add(f?"fail":"pass");
+      prev.querySelector(".st").textContent=f?"FAILED":"PASS";
+      if(f){prev.querySelector(".pv").textContent=f;
+        scanbox.classList.add("fail");
+        if(MOTION){const st=document.getElementById("stage");
+          st.classList.remove("shake");void st.offsetWidth;st.classList.add("shake")}}}
+    if(i>=rows.length){
+      const nf=opts.fails?Object.keys(opts.fails).length:0;
+      if(nf===0){verdictEl.className="ok";
+        verdictEl.innerHTML="VERIFIED: every check (B1\u2013B6) passed.<span class='ex'>exit 0</span>"}
+      else{verdictEl.className="bad";
+        verdictEl.innerHTML=`FAILED: ${nf} problem(s).<span class='ex'>exit 1</span>`}
+      if(done)setTimeout(done,DUR(400));return}
+    rows[i].classList.add("live");i++;setTimeout(step,DUR(560));
+  })();
+}
+function closeScanner(){scanner.classList.remove("open")}
+
+/* ---------- captions & chrome ---------- */
+const captionEl=document.getElementById("caption"),beatlabel=document.getElementById("beatlabel"),
+      primary=document.getElementById("primary"),titlecard=document.getElementById("titlecard");
+let capTimer=null;
+function caption(main,sub,holdMs){
+  clearTimeout(capTimer);captionEl.classList.remove("on");
+  setTimeout(()=>{captionEl.innerHTML=main+(sub?`<span class="sub">${sub}</span>`:"");
+    captionEl.classList.add("on")},DUR(350));
+  if(holdMs)capTimer=setTimeout(()=>captionEl.classList.remove("on"),DUR(holdMs));}
+
+/* ---------- the beats (each answers one question) ---------- */
+let beat=0,busy=false,director=false,dirTimer=null;
+const analystEdge=()=>({x:W-40,y:H*0.30});
+const pipelineEdge=()=>({x:-40,y:py(nodeById["mem-poison"])});
+
+function lock(ms,then){busy=true;primary.disabled=true;
+  setTimeout(()=>{busy=false;primary.disabled=false;if(then)then();
+    if(director)scheduleNext()},DUR(ms))}
+
+const BEATS=[
+{label:"BEGIN",name:"",dwell:1200,run(){ /* 0: title -> field awakens */
+  titlecard.classList.add("off");
+  seedChains();
+  const gate=nodeById["mem-gate"],roll=nodeById["mem-rollback"];
+  nodes.filter(n=>!n.protag).forEach((n,i)=>spawn(n,300+i*95));
+  spawn(gate,2700);spawn(roll,3100);
+  flabel(px(gate),py(gate)-6,"STORED · agent-0",C.graphite,3200);
+  flabel(px(roll),py(roll)-6,"STORED · agent-0",C.graphite,3600);
+  links.forEach(L=>{if(L.kind==="RESONANT")tween(L,"alpha",1,1600,3400)});
+  caption("A field grows. Every memory is born with a chain.",
+          "every memory remembers who changed it",0);
+  lock(4600)}},
+
+{label:"REINFORCE THE TRUTH",name:"THE FIELD",dwell:4200,run(){ /* 1 */
+  const gate=nodeById["mem-gate"];const conf=["0.5\u21920.625","0.625\u21920.71875","0.71875\u21920.7890625"];
+  for(let i=0;i<3;i++){
+    pulse(analystEdge(),gate,C.vitaB,1100,i*950,"analyst-omar",()=>{
+      ringFlash(gate,C.vitaB);ev("mem-gate",gate.chain.length,"REINFORCED","analyst-omar",
+        "verified against the runbook","confidence "+conf[i]);
+      flabel(px(gate),py(gate)-10,"REINFORCED "+conf[i],C.vitaB);});}
+  setTimeout(()=>{gate.state="REINFORCED";tween(gate,"glow",1.35,900);
+    ev("mem-gate",gate.chain.length,"STATE_CHANGED","analyst-omar",
+       "promotion threshold 3/4 reached","NEUTRAL\u2192REINFORCED");
+    flabel(px(gate),py(gate)-24,"\u2192 REINFORCED",C.vitaB)},DUR(3300));
+  caption("agent-0 stored it. analyst-omar verified it — three times.",
+          "reinforcement is an audited event: c\u2032 = c + \u00BC(1\u2212c), exact",0);
+  lock(4400)}},
+
+{label:"THE POISON WRITES",name:"THE INCIDENT",dwell:4600,run(){ /* 2 */
+  const poison=nodeById["mem-poison"],gate=nodeById["mem-gate"];
+  pulse(pipelineEdge(),poison,C.taint,1400,200,"agent-2-compromised",()=>{
+    poison.visible=true;poison.tint=1;
+    tween(poison,"scale",1,700,0,easeO);tween(poison,"glow",1,900,0,easeO);
+    ripple(px(poison),py(poison),C.taint,30,900);
+    ev("mem-poison",0,"STORED","agent-2-compromised","feed sync",
+       "topic=deploy-policy · claim=gate-optional");
+    setTimeout(()=>{tween(inhLink,"alpha",1,900);
+      ringFlash(gate,C.taint,0);ringFlash(poison,C.taint,0);
+      ev("mem-poison",1,"CONTRADICTED_BY","agent-2-compromised",
+         "conflicting claim on topic deploy-policy","other=mem-gate");
+      ev("mem-gate",1,"CONTRADICTED_BY","agent-2-compromised",
+         "conflicting claim on topic deploy-policy","other=mem-poison");
+      /* staged order is reinforce-first for the narrative arc;
+         fixSeq keeps each chain dense from 0 as displayed */
+      fixSeq("mem-gate");fixSeq("mem-poison");
+      flabel((px(poison)+px(gate))/2,(py(poison)+py(gate))/2,
+        "CONTRADICTED_BY — recorded on BOTH chains",C.taint,200,3400);
+    },DUR(900));});
+  caption("A compromised pipeline plants a lie.",
+          "the contradiction lands on both chains — neither export can hide it",0);
+  lock(4800)}},
+
+{label:"THE ACTOR INFLATES",name:"THE INCIDENT",dwell:3800,run(){ /* 3 */
+  const roll=nodeById["mem-rollback"];
+  pulse(pipelineEdge(),roll,C.taint,1500,200,"agent-2-compromised",()=>{
+    ringFlash(roll,C.taint);
+    ev("mem-rollback",1,"REINFORCED","agent-2-compromised","feed corroboration",
+       "confidence 0.5\u21920.625");fixSeq("mem-rollback");
+    flabel(px(roll),py(roll)-10,"REINFORCED · agent-2-compromised",C.taint);});
+  caption("…and quietly inflates a legitimate memory.",
+          "confidence raised by an actor nobody suspects yet",0);
+  lock(3600)}},
+
+{label:"RUN RECALL",name:"RECALL — BEFORE",dwell:6400,run(){ /* 4 */
+  const gate=nodeById["mem-gate"],poison=nodeById["mem-poison"];
+  const qx=(px(poison)+px(gate))/2-30,qy=py(poison)-64;
+  queryMarker={x:qx,y:qy,label:"query · near the poison",until:performance.now()+DUR(5600)};
+  ripple(qx,qy,C.seal,90,1400);
+  stroke({x:qx,y:qy},gate,C.vitaB,900,600);
+  stroke({x:qx,y:qy},poison,C.taint,900,900);
+  setTimeout(()=>{ringFlash(gate,C.vitaB);ringFlash(poison,C.taint,150)},DUR(1500));
+  setTimeout(()=>openDossier("RECALL RECEIPT — BEFORE",receiptHTML({
+    query:"q1",seed:"mem-gate",hash:pseudoHash("receipt:q1:before"),
+    served:[{id:"mem-gate",state:"REINFORCED",score:score("q1","mem-gate",1.5),rescued:true},
+            {id:"mem-poison",state:"NEUTRAL",score:score("q1","mem-poison",1)}],
+    withheld:[],counts:{custody:0,forgotten:0,inhibited:0},
+    note:"the rescue rule held — a validated truth survived its inhibition. But the poison is servable. The lie is out."
+  })),DUR(1900));
+  caption("The field defends itself — and shows its limit.",
+          "REINFORCED mem-gate survives inhibition (rescue rule) · the poison is served",0);
+  lock(5200)}},
+
+{label:"CONTAIN INCIDENT",name:"CONTAINMENT",contain:true,dwell:8200,run(){ /* 5 */
+  dossier.classList.remove("open");
+  const flagged=SWEEP.flagged.map(id=>nodeById[id]);
+  ripple(W/2,H*0.48,C.seal,Math.max(W,H)*0.55,1600);
+  flagged.forEach((n,i)=>{
+    pulse(pipelineEdge(),n,C.taint,1000,300+i*350,null,()=>{
+      n.custody="TAINT_FLAGGED";
+      tween(n,"tint",1,700);tween(n,"glow",1.5,500,0,easeO,()=>tween(n,"glow",0.2,2600));
+      tween(n,"dim",1,3400,700);tween(n,"sinkPx",46,4200,700);
+      links.forEach(L=>{if(L.a===n.id||L.b===n.id)tween(L,"alpha",0,2400,500)});
+      ev(n.id,n.chain.length,"TAINT_FLAGGED","analyst-omar",SWEEP.reason,"sweep_id="+SWEEP.id);
+      fixSeq(n.id);
+    });});
+  setTimeout(()=>{const g=nodeById["mem-gate"];ringFlash(g,C.seal,0,2000);
+    flabel(px(g),py(g)-26,"attacked — not influenced. NOT flagged.",C.seal,0,3600)},DUR(2600));
+  setTimeout(()=>{SWEEP.advisory.forEach(id=>nodeById[id].advisory=true);
+    flabel(px(nodeById[SWEEP.advisory[0]]),py(nodeById[SWEEP.advisory[0]])-16,
+      "advisory — reported, never auto-flagged",C.seal,0,3200)},DUR(3400));
+  setTimeout(()=>{flabel(W/2,H*0.80,"sweep sealed · sha256 "+short(SWEEP.seal,18),C.seal,0,4200);
+    openDossier("TAINT SWEEP "+SWEEP.id,sweepHTML())},DUR(4300));
+  caption("One sealed sweep — everything the actor touched.",
+          "flagged, disconnected, withheld. Never deleted: the evidence keeps burning.",0);
+  lock(7600)}},
+
+{label:"RUN RECALL AGAIN",name:"RECALL — AFTER",dwell:6000,run(){ /* 6 */
+  const gate=nodeById["mem-gate"],poison=nodeById["mem-poison"],roll=nodeById["mem-rollback"];
+  const qx=px(poison)+40,qy=py(poison)-84;
+  queryMarker={x:qx,y:qy,label:"same query",until:performance.now()+DUR(5200)};
+  ripple(qx,qy,C.seal,90,1400);
+  stroke({x:qx,y:qy},gate,C.vitaB,900,600);
+  setTimeout(()=>{ringFlash(gate,C.vitaB);
+    flabel(px(poison),py(poison)-10,"withheld · custody",C.taint,0,2600);
+    flabel(px(roll),py(roll)-10,"withheld · custody",C.taint,200,2600)},DUR(1400));
+  setTimeout(()=>openDossier("RECALL RECEIPT — AFTER",receiptHTML({
+    query:"q1",seed:"mem-gate",hash:pseudoHash("receipt:q1:after"),
+    served:[{id:"mem-gate",state:"REINFORCED",score:score("q1","mem-gate",1.5),rescued:false}],
+    withheld:[{id:"mem-poison",reason:"custody_status \u2260 CLEAN"},
+              {id:"mem-rollback",reason:"custody_status \u2260 CLEAN"}],
+    counts:{custody:2,forgotten:0,inhibited:0},
+    note:"the gate is a WHERE clause, not a post-filter — a tainted memory can be neither a result nor an influence. No rescue needed: the inhibitor is gone from the graph."
+  })),DUR(1900));
+  caption("The gate withholds. The receipt counts.",
+          "withheld: custody=2 — every exclusion is a sealed, countable fact",0);
+  lock(5400)}},
+
+{label:"REHABILITATE MEM-ROLLBACK",name:"REHABILITATION",dwell:5600,run(){ /* 7 */
+  const roll=nodeById["mem-rollback"];
+  pulse(analystEdge(),roll,C.seal,1200,200,"analyst-omar",()=>{
+    ringFlash(roll,C.seal,0,2000);
+    roll.custody="CLEAN";
+    tween(roll,"dim",0,1800);tween(roll,"tint",0,1800);
+    tween(roll,"sinkPx",0,2200);tween(roll,"glow",1,2000);
+    links.forEach(L=>{if((L.a===roll.id||L.b===roll.id)&&L.kind==="RESONANT")tween(L,"alpha",1,2000,600)});
+    ev("mem-rollback",roll.chain.length,"REHABILITATED","analyst-omar",
+      "reviewed INC-1207: content predates the compromise; only its confidence was inflated",
+      "from_status=TAINT_FLAGGED");fixSeq("mem-rollback");
+    flabel(px(roll),py(roll)-14,"REHABILITATED — by audited event",C.seal,0,3200);});
+  setTimeout(()=>openDossier("CUSTODY — mem-rollback",chainHTML(nodeById["mem-rollback"])),DUR(2800));
+  caption("The false positive returns — by audited event.",
+          "never by column edit. The taint, and its reversal, both live on the chain. The poison stays gated.",0);
+  lock(5200)}},
+
+{label:"EXPORT EVIDENCE BUNDLE",name:"THE AUDIT (PLANNED)",dwell:7200,run(){ /* 8 */
+  dossier.classList.remove("open");
+  caption("The whole field ships as one sealed file — planned.","sealed bundle export is designed, not yet built for this codebase; today the verifier is audit.custody.verify_custody_chain against the live cluster",4200);
+  setTimeout(()=>runScanner({file:"field.bundle.json",seal:pseudoHash("bundle:honest")}),DUR(1200));
+  lock(6600)}},
+
+{label:"ERASE THE TAINT",name:"THE COVER-UP",contain:true,dwell:9200,run(){ /* 9 */
+  runScanner({file:"field.tampered.json",seal:pseudoHash("bundle:tampered"),resealed:true,
+    tamper:`the forger edits one column and reseals the bundle:<br>
+      mem-poison · custody_status: <span class="del">TAINT_FLAGGED</span> \u2192 <span class="ins">CLEAN</span><br>
+      <span style="color:var(--faint)">bundle_sha256 recomputed — B1 will pass. The chain was not asked.</span>`,
+    fails:{B4:"declared CLEAN — replay of the chain says TAINT_FLAGGED. State does not replay. Evidence tampered."}});
+  caption("You can edit the column. You cannot edit the evidence.",
+          "state is derivable from evidence — the forgery reveals itself",0);
+  lock(8600)}},
+
+{label:"ASK THE CHAIN",name:"THE ANSWER",dwell:6000,run(){ /* 10 */
+  closeScanner();
+  openDossier("CUSTODY — mem-rollback",chainHTML(nodeById["mem-rollback"]));
+  ringFlash(nodeById["mem-rollback"],C.seal,300,2200);
+  caption("Why does your agent remember this?","ask the chain. Every line is provable by anyone holding the bundle.",0);
+  lock(3600)}},
+
+{label:"RESTART",name:"STIGMERGY",dwell:0,run(){location.reload()}}
+];
+function fixSeq(id){nodeById[id].chain.forEach((e,i)=>e.seq=i)}
+
+/* ---------- driver ---------- */
+function fire(){
+  if(busy||beat>=BEATS.length)return;
+  const b=BEATS[beat];
+  beatlabel.textContent=b.name?("\u2013 "+b.name+" \u2013"):"";
+  b.run();beat++;
+  const nb=BEATS[beat];
+  if(nb){primary.textContent=nb.label;
+    primary.classList.toggle("contain",!!nb.contain)}
+  else primary.style.display="none";
+}
+function scheduleNext(){
+  if(!director||beat>=BEATS.length)return;
+  const prev=BEATS[beat-1];clearTimeout(dirTimer);
+  if(BEATS[beat].label==="RESTART"){director=false;syncModeBtn();return}
+  dirTimer=setTimeout(fire,DUR(prev?prev.dwell:800));
+}
+primary.onclick=fire;
+addEventListener("keydown",e=>{
+  if(e.code==="Space"||e.code==="ArrowRight"){e.preventDefault();fire()}
+  if(e.key==="r"||e.key==="R")location.reload();
+  if(e.key==="d"||e.key==="D")toggleMode();
+  if(e.key==="Escape")closeScanner();});
+document.getElementById("resetbtn").onclick=()=>location.reload();
+const modebtn=document.getElementById("modebtn");
+function syncModeBtn(){modebtn.textContent=director?"director \u25CF":"manual"}
+function toggleMode(){director=!director;syncModeBtn();
+  if(director&&!busy&&beat<BEATS.length)fire();else clearTimeout(dirTimer)}
+modebtn.onclick=toggleMode;syncModeBtn();
+
+/* click a memory -> its chain */
+cv.addEventListener("click",e=>{
+  const mx=e.clientX,my=e.clientY;let best=null,bd=26;
+  nodes.forEach(n=>{if(!n.visible)return;
+    const d=Math.hypot(px(n)-mx,py(n)-my);if(d<bd){bd=d;best=n}});
+  if(best)openDossier("CUSTODY — "+best.id,chainHTML(best));});
+</script>
+</body>
+</html>

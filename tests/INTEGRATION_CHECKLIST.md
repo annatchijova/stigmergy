@@ -177,3 +177,44 @@ Each item states what must be pinned, and which audit finding demands it.
       UNIQUE(snapshot_seq), never a forked ledger.
 - [ ] verify_chain and verify_ledger pass end-to-end after a realistic
       mixed workload (store/recall/reinforce/emit/resolve/sweep).
+
+## ops.trust / audit.custody (MNEME custody-layer port)
+
+- [ ] **store()/reinforce() write both chains atomically.** `store()`
+      must commit an `audit_chain` MEMORY_STORED row AND a
+      `custody_chain` STORED row (seq 0) together; abort the transaction
+      before commit and confirm neither persists. Same for `reinforce()`
+      and its paired MEMORY_REINFORCED / REINFORCED events.
+- [ ] **quarantine_actor flags exactly the right set.** A node with 5+
+      memories across 2 regions, including one CONTRADICTED_BY-only
+      chain (must be EXCLUDED) and one REINFORCED-only chain (must be
+      INCLUDED — inflation is influence). Confirm
+      `taint_sweeps.flagged_ids_sha256` matches an independently
+      recomputed `sha256(canonical_json({"memory_ids": sorted(ids)}))`.
+- [ ] **A second quarantine_actor on the same node fails.**
+      `UNIQUE(quarantined_actor)` — confirm the schema constraint fires
+      even if the application-level idempotence check is bypassed
+      (call the SQL directly).
+- [ ] **recall() gate is in the query plan, not Python.** Before/after a
+      sweep, same query, same region: flagged memories disappear from
+      results. Run `EXPLAIN` and confirm `custody_status = 'CLEAN'` is a
+      pushed predicate, not a post-filter.
+- [ ] **Concurrent quarantine_memory on one memory_id.** Two
+      transactions targeting the same memory: one clean UPDATE + custody
+      event, one `ValueError` (already QUARANTINED) or a 40001 retry via
+      `run_in_transaction` — never a lost update or a duplicate custody
+      event.
+- [ ] **verify_sweep catches a corrupted seal.** Manually flip one
+      character of `taint_sweeps.flagged_ids_sha256`; confirm
+      `ops.trust.verify_sweep` returns `ok=False` with a clear mismatch
+      message, not a silent pass.
+- [ ] **Advisory RESONANT neighbours query is correct on CockroachDB.**
+      `cell_links`' undirected pair schema (`memory_id_a < memory_id_b`)
+      means the neighbour query unions both columns — confirm it returns
+      the right set for a flagged memory that appears as both
+      `memory_id_a` in one link and `memory_id_b` in another.
+- [ ] **Authority gates hold.** `quarantine_actor` from a node without
+      `AUTHORITY_ADMIN` (or not in `authority_administrators`) is
+      refused; `quarantine_memory`/`rehabilitate_memory` from a node
+      without `REGION_ADMIN` is refused. Confirm no partial state landed
+      in either refusal case.

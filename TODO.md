@@ -48,6 +48,19 @@ corresponding execution evidence exists.
   is a Cloud deployment.
 - [ ] Update README/HACKATHON submission text only with claims supported by the
   recorded Cloud and demo evidence.
+- [x] Custody+taint layer ported from MNEME (`audit/custody.py`,
+  `ops/trust.py`, `ops/memories.py` integration, `demo/field_viewer.html`)
+  — pure-tested, NOT yet exercised against a live cluster. See item 2's new
+  "ops.trust / audit.custody" checklist section below before claiming this
+  works end to end.
+- [ ] Capture `demo/field_viewer.html` (director mode) as part of the
+  submission video — it is the visual for custody-gated recall and the
+  taint sweep, and it needs no server (open the file directly). It is a
+  staged replay, not a live capture; label it that way in the video too,
+  same discipline as the local secure demo above.
+- [ ] Fast-follow, not required for submission: port MNEME's `bundle.py` /
+  `verify_offline.py` (sealed evidence export + independent offline
+  verifier) once custody+taint have Cloud integration-checklist evidence.
 
 ## 4. Engineering after the submission
 

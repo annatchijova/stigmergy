@@ -51,6 +51,7 @@ from fractions import Fraction
 
 from audit.canonical import quantize
 from audit.chain import append_event
+from audit import custody as memory_custody
 from .authority import require_node_capability, require_region_capability
 
 # Reinforcement step: c' = c + (1 - c) * ALPHA. Exact rational constant —
@@ -186,16 +187,16 @@ def store(
     from embeddings.base import to_pgvector_literal
 
     conf = quantize(confidence, "confidence")
+    digest = _content_sha256(content)
     cur.execute(
         """
-        INSERT INTO memories (region_id, embedding, content, confidence)
-        VALUES (%s, %s::VECTOR, %s, %s)
+        INSERT INTO memories (region_id, embedding, content, content_sha256, confidence)
+        VALUES (%s, %s::VECTOR, %s, %s, %s)
         RETURNING id
         """,
-        (region_id, to_pgvector_literal(vector), content, conf),
+        (region_id, to_pgvector_literal(vector), content, digest, conf),
     )
     memory_id = str(cur.fetchone()[0])
-    digest = _content_sha256(content)
 
     append_event(
         cur,
@@ -207,6 +208,22 @@ def store(
             "region_id": region_id,
             "provider_id": provider.provider_id,
             "content_sha256": digest,
+            "confidence": conf,
+        },
+    )
+    # Per-memory custody chain (additive to the per-node event above — see
+    # audit/custody.py). STORED is the memory's birth event; genesis is
+    # bound to memory_id, not to node_id.
+    memory_custody.append_event(
+        cur,
+        memory_id=memory_id,
+        event_type="STORED",
+        actor_id=node_id,
+        reason=reason,
+        payload={
+            "content_sha256": digest,
+            "region_id": region_id,
+            "provider_id": provider.provider_id,
             "confidence": conf,
         },
     )
@@ -296,6 +313,12 @@ def recall(
     from embeddings.base import to_pgvector_literal
     literal = to_pgvector_literal(vector)
 
+    # custody_status = 'CLEAN' gates recall against TAINT_FLAGGED and
+    # QUARANTINED memories (audit/custody.py, ops/trust.py). The predicate
+    # is pushed into SQL, not filtered in Python, so a flagged memory never
+    # reaches the rediscovery branch below either — gating at the query is
+    # what makes "recall never serves a tainted memory" a property of the
+    # query plan, not of downstream code remembering to check.
     if region_id is not None:
         cur.execute(
             """
@@ -303,6 +326,7 @@ def recall(
                    embedding <-> %s::VECTOR AS distance
               FROM memories
              WHERE region_id = %s
+               AND custody_status = 'CLEAN'
              ORDER BY distance
              LIMIT %s
             """,
@@ -314,6 +338,7 @@ def recall(
             SELECT id, content, tier, state, confidence,
                    embedding <-> %s::VECTOR AS distance
               FROM memories
+             WHERE custody_status = 'CLEAN'
              ORDER BY distance
              LIMIT %s
             """,
@@ -450,6 +475,20 @@ def reinforce(cur, *, node_id: str, memory_id: str, reason: str) -> ReinforcedMe
             "old_confidence": quantize(old_conf, "old_confidence"),
             "new_confidence": new_conf_decimal,
             "alpha": f"{REINFORCEMENT_ALPHA.numerator}/{REINFORCEMENT_ALPHA.denominator}",
+        },
+    )
+    # Per-memory custody event, additive to the per-node event above.
+    memory_custody.append_event(
+        cur,
+        memory_id=str(memory_id),
+        event_type="REINFORCED",
+        actor_id=node_id,
+        reason=reason,
+        payload={
+            "old_state": old_state,
+            "new_state": "REINFORCED",
+            "old_confidence": quantize(old_conf, "old_confidence"),
+            "new_confidence": new_conf_decimal,
         },
     )
     return ReinforcedMemory(

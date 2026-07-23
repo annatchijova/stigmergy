@@ -79,6 +79,40 @@ a quiet patch.
 | `agent_search_state` | Per-agent roaming/dwelling controller state, driven by hysteresis over resonance density read from `memories` — not by agent-local confidence. |
 | `audit_chain` | Per-node, tamper-evident hash chain of every state-changing event. |
 | `merkle_snapshots` | Chained Merkle roots over all nodes' chain heads. A ledger of ledgers. |
+| `custody_chain` | Per-MEMORY, tamper-evident hash chain — a second axis alongside `audit_chain` (per-node). Ported from MNEME. |
+| `taint_sweeps` | One sealed row per `ops.trust.quarantine_actor()` call: the memory-id set flagged as tainted, hashed and checkable. |
+
+## Custody layer (per-memory, Phase 1, local-verified only)
+
+`audit_chain` answers "what did this NODE do, in order" (Invariant 3,
+above). It does not answer a different, equally real question a
+poisoned-write incident actually asks: *what happened to THIS MEMORY —
+who created it, who reinforced it, what contradicted it, when was it
+quarantined and why, can I prove none of that history was rewritten
+after the fact?* `custody_chain` (`audit/custody.py`) answers that,
+additively — same discipline (caller owns the transaction, `reason` NOT
+NULL, append-only, hash-linked), different key (`memory_id` instead of
+`node_id`), genesis bound to the memory's own id so one exported chain
+verifies against nothing but itself.
+
+`ops/trust.py` builds on it: `quarantine_actor` flags every memory a
+node's custody chain names (except `CONTRADICTED_BY` — see that
+module's docstring for why), seals the flagged set's hash into
+`taint_sweeps`, and `ops/memories.py`'s `recall()` gates on
+`custody_status = 'CLEAN'` — pushed into the SQL predicate, not filtered
+downstream, so a tainted memory is structurally unable to reach a
+result or a rediscovery. `quarantine_memory` / `rehabilitate_memory`
+handle single-memory review. Full design rationale, including the
+resolved question of why taint is orthogonal to `agent_nodes.status`
+(revocation): see `AUTHORITY_MODEL.md`'s "Custody layer operations"
+section and `KNOWN_LIMITATIONS.md`'s "Custody layer" section.
+
+**Status**: implemented and pure-tested (`tests/test_custody_pure.py`,
+`tests/test_trust_pure.py`); NOT yet exercised against a real cluster —
+see `tests/INTEGRATION_CHECKLIST.md`'s "ops.trust / audit.custody"
+section and `TODO.md`. Do not describe this layer as Cloud-verified
+until that evidence exists (same discipline the rest of this file
+already applies to the AWS/CockroachDB deployment).
 
 ## Why CockroachDB is load-bearing, not incidental
 

@@ -161,23 +161,35 @@ CREATE TABLE node_region_capabilities (
 -- ON UPDATE: each one must change only when its specific semantic event
 -- occurs, not whenever any column of the row is touched.
 -- -----------------------------------------------------------------------------
+-- custody_status / content_sha256 (MNEME custody-layer port, see
+-- audit/custody.py and ops/trust.py): custody_status gates whether
+-- recall() may serve this memory at all — CLEAN is the only status
+-- recall() selects. content_sha256 is sealed into the custody chain's
+-- STORED event payload at birth and never reasserted (custody.py's
+-- Invariant M1 analogue). No 'SUPERSEDED' status: no supersede() flow
+-- exists yet in this codebase, so that state is deliberately not built
+-- (see KNOWN_LIMITATIONS.md).
 CREATE TABLE memories (
     id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     region_id             STRING NOT NULL REFERENCES memory_regions(region_id),
     embedding             VECTOR(384) NOT NULL,
     content               STRING NOT NULL,
+    content_sha256         STRING,
     state                 STRING NOT NULL DEFAULT 'NEUTRAL'
                                CHECK (state IN ('REINFORCED','NEUTRAL','FORGOTTEN')),
     tier                  STRING NOT NULL DEFAULT 'SHORT_TERM'
                                CHECK (tier IN ('SHORT_TERM','REGIONAL','GLOBAL','ORPHANED')),
     confidence             DECIMAL(11,10) NOT NULL DEFAULT 0.5
                                CHECK (confidence >= 0 AND confidence <= 1),
+    custody_status         STRING NOT NULL DEFAULT 'CLEAN'
+                               CHECK (custody_status IN ('CLEAN','TAINT_FLAGGED','QUARANTINED')),
     recall_count           INT8 NOT NULL DEFAULT 0 CHECK (recall_count >= 0),
     created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_accessed_at        TIMESTAMPTZ,
     last_reinforced_at       TIMESTAMPTZ,
     last_migrated_at         TIMESTAMPTZ,
-    VECTOR INDEX (region_id, embedding)
+    VECTOR INDEX (region_id, embedding),
+    INDEX (custody_status)
 );
 
 -- -----------------------------------------------------------------------------
@@ -335,4 +347,75 @@ CREATE TABLE merkle_snapshots (
     created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (parent_snapshot),
     UNIQUE (snapshot_seq)
+);
+
+-- -----------------------------------------------------------------------------
+-- custody_chain — per-MEMORY tamper-evident hash chain. Ported from MNEME
+-- (see audit/custody.py), additive to audit_chain above: audit_chain
+-- answers "what did this NODE do, in order"; custody_chain answers "what
+-- happened to THIS MEMORY". Same discipline: reason NOT NULL, append-only,
+-- caller owns the transaction (Invariant 3's letter, applied a second time
+-- to a second axis).
+--
+-- Genesis is bound to memory_id, not a global constant:
+--   prev_hash(seq 0) = sha256("MNEME_CUSTODY_GENESIS:" || memory_id::text)
+-- audit_chain's genesis is a global constant because node_id already sits
+-- inside every hashed envelope; here the binding moves into genesis so a
+-- single exported chain verifies against nothing but itself and the
+-- memory_id it claims to describe — grafting memory A's history onto
+-- memory B fails at seq 0 by construction, not by later inspection.
+--
+-- event_type vocabulary is intentionally narrower than MNEME's: no
+-- 'SUPERSEDED_BY' (no supersede() flow exists here — see
+-- KNOWN_LIMITATIONS.md). 'STATE_CHANGED' is kept reserved-but-unused for
+-- the same reason audit_chain documents unused-but-closed vocabulary
+-- elsewhere: closing the set on day one is cheaper than reopening it
+-- later under pressure.
+-- -----------------------------------------------------------------------------
+CREATE TABLE custody_chain (
+    memory_id             UUID NOT NULL REFERENCES memories(id),
+    seq                    INT8 NOT NULL CHECK (seq >= 0),
+    prev_hash               STRING NOT NULL,
+    entry_hash               STRING NOT NULL,
+    event_type              STRING NOT NULL CHECK (event_type IN (
+                                'STORED','REINFORCED','CONTRADICTED_BY',
+                                'QUARANTINED','TAINT_FLAGGED','REHABILITATED',
+                                'STATE_CHANGED'
+                             )),
+    actor_id                STRING NOT NULL REFERENCES agent_nodes(node_id),
+    reason                  STRING NOT NULL,
+    payload_json             JSONB NOT NULL,
+    created_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (memory_id, seq),
+    UNIQUE (memory_id, prev_hash),
+    INDEX (actor_id)
+);
+
+-- -----------------------------------------------------------------------------
+-- taint_sweeps — one sealed row per ops.trust.quarantine_actor() call. The
+-- flagged set is derived from custody_chain by a single query with a total
+-- ORDER BY, then sealed as sha256(canonical_json({"memory_ids": sorted_ids})),
+-- so "we flagged exactly these" is a claim any auditor can recompute and
+-- check against flagged_ids_sha256, not merely trust.
+--
+-- There is deliberately no "reversed_at" here — un-sweeping a whole actor
+-- at once has no designed review path in Phase 1; only per-memory
+-- ops.trust.rehabilitate_memory() exists (see KNOWN_LIMITATIONS.md).
+-- Whether an actor is "currently" under a taint investigation is a derived
+-- read against this table (EXISTS a row for quarantined_actor), not a
+-- stored status on agent_nodes — taint and node revocation
+-- (agent_nodes.status) are orthogonal questions on purpose: revocation is
+-- "can this node still write", taint is "what did it write that we no
+-- longer trust". Collapsing them would force one bit to answer two
+-- unrelated questions.
+-- -----------------------------------------------------------------------------
+CREATE TABLE taint_sweeps (
+    sweep_id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    quarantined_actor       STRING NOT NULL REFERENCES agent_nodes(node_id),
+    initiated_by             STRING NOT NULL REFERENCES agent_nodes(node_id),
+    reason                   STRING NOT NULL,
+    flagged_count             INT8 NOT NULL CHECK (flagged_count >= 0),
+    flagged_ids_sha256         STRING NOT NULL,
+    created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (quarantined_actor)
 );

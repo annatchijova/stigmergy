@@ -90,6 +90,46 @@ legitimate regions.
   cron loops chunks (`bounded_drain`) and reports `drained: false` when
   budget runs out before backlog does.
 
+## Custody layer (ported from MNEME — audit/custody.py, ops/trust.py)
+
+- **Direct taint only.** A memory is flagged if a node's own custody
+  chain names it as `actor_id` (except `CONTRADICTED_BY` — see
+  `ops/trust.py`'s module docstring for why). TRANSITIVE taint — a
+  flagged memory's RESONANT neighbours inflated by association — is
+  real but unbounded; `quarantine_actor` reports the one-hop RESONANT
+  neighbourhood as an ADVISORY list, never auto-flags it. Automatic
+  transitive flagging without a fixpoint bound is how a quarantine
+  becomes a self-inflicted denial of service on the field.
+- **No supersession.** `SUPERSEDED` custody status and `SUPERSEDED_BY`
+  event type are deliberately not built — no `supersede()` flow exists
+  in `ops/memories.py` yet. If one is added later, the custody
+  vocabulary needs a matching, reviewed extension (it is closed on
+  purpose — see `audit/custody.py`).
+- **No per-actor un-sweep.** `taint_sweeps` has `UNIQUE(quarantined_actor)`
+  — a node can be swept once. Only `rehabilitate_memory` exists
+  (per-memory, TAINT_FLAGGED → CLEAN, audited). Reversing an entire
+  sweep at once has no designed review path in Phase 1, same limitation
+  MNEME itself documents.
+- **`REGION_ADMIN` is global, not per-region**, despite gating
+  `quarantine_memory`/`rehabilitate_memory` as if it were regional
+  authority — an existing quirk of `ops/authority.py`'s capability
+  model that this port inherits and surfaces (see `AUTHORITY_MODEL.md`)
+  rather than working around with new region-scoped semantics.
+- **`demo/field_viewer.html` is a staged, hand-authored replay**, not a
+  live capture of a real cluster run — same honesty note MNEME's own
+  README carries for the original. It visualizes the custody+taint
+  mechanics that `audit/custody.py`/`ops/trust.py` actually implement;
+  it does not call them. The verifier of record is
+  `audit.custody.verify_custody_chain` against live rows, not the
+  viewer's display hashes (`pseudoHash`, explicitly cosmetic).
+- **No sealed evidence bundle export yet.** MNEME's `bundle.py` /
+  `verify_offline.py` (export the whole field as one hash-sealed file, a
+  distrusting third party verifies offline with one stdlib script) was
+  not ported in this pass — natural fast-follow once custody+taint have
+  Cloud integration-checklist evidence (`tests/INTEGRATION_CHECKLIST.md`).
+  `demo/field_viewer.html`'s "EXPORT EVIDENCE BUNDLE" beat is labeled
+  `(PLANNED)` for exactly this reason.
+
 ## Demo-only substitutes
 
 - `--local-resolver` POLLS pending signals as a stand-in for the
