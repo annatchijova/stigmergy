@@ -59,12 +59,35 @@ index remains the independent anti-flood guard. This is not Byzantine
 consensus: distinct compromised credentials can still represent distinct
 legitimate regions.
 
+**A revoked node's already-emitted vote is retracted only when its region
+runs dry (Round 3, R3-03/REC-019).** `recruitment_signals` records
+`origin_region`, not the emitting node — capability is enforced at write
+time (`emit_signal` requires an active `SIGNAL` grant), never re-checked
+per-signal at resolution time, and no schema column attributes an
+individual signal to the node that emitted it. `revoke_node` now closes
+the one case that column-less design can still close cleanly: after
+revoking a node's `SIGNAL` grants, it checks whether each affected region
+has any OTHER node with an active `SIGNAL` capability; if none remain,
+that region's `PENDING` signals are expired (not deleted — Invariant 8),
+named in the same `NODE_REVOKED` audit event
+(`regions_left_without_signal_holder` / `recruitment_signals_expired`).
+If the region still has another active `SIGNAL` holder, its existing
+votes stand untouched — deliberately: a signal is the region's pheromone,
+not personally the revoked node's, and one authorized voice remaining is
+enough for the system to keep trusting the trail. Attributing individual
+votes to individual nodes (so ONE revoked contributor's vote could be
+subtracted from a region that still has others) remains unbuilt and
+would need that schema column.
+
 ## Deferred to Phase 2
 
 - **Region split/merge** — requires explicit CAS serialization on
-  `memory_regions.status`. Until then, `resolve_recruitment` checks
-  region status without `FOR SHARE`; the code comments mark where the
-  lock must appear when reshaping lands.
+  `memory_regions.status`. `resolve_recruitment` already reads that
+  status `FOR SHARE` (Round 3 red team, REC-011 follow-through) so a
+  concurrent status change cannot slip between the check and the
+  migration `UPDATE`; the reshape operation itself — the thing that
+  would actually change `status` after creation — still does not exist
+  (`ops/regions.py` is create-only today).
 - **GLOBAL-tier policy** — GLOBAL memories do not orphan (excluded by
   design from the sweep) and a recruitment migration demotes them to
   REGIONAL (visible in the `MEMORY_MIGRATED` payload as

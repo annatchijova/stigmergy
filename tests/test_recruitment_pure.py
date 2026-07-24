@@ -14,8 +14,8 @@ from datetime import timedelta
 from fractions import Fraction
 
 from ops.recruitment import (
-    CONSENSUS_QUORUM, LiveSignal, compute_consensus, emit_signal,
-    expire_signals, resolve_recruitment,
+    CONSENSUS_QUORUM, LiveSignal, MemoryOrphaned, compute_consensus,
+    emit_signal, expire_signals, resolve_recruitment,
 )
 
 failures = []
@@ -195,6 +195,42 @@ def t_emit_rejects_unknown_reason():
     expect_raises(ValueError, lambda: emit_signal(
         None, node_id="n", origin_region="r", memory_id="m",
         reason="BECAUSE", vigor=Fraction(1, 2)))
+
+# --- REC-018: an ORPHANED memory is not consensus's to resurrect -------------
+
+class _FakeCursor:
+    """
+    Scripted (SELECT-result, ) queue standing in for a real cursor, just
+    far enough to reach the ORPHANED guard: require_region_capability's
+    three reads (agent_nodes, current_user, node_region_capabilities),
+    then memory_regions.status, then the memories row itself. No fifth
+    query (the live-signals SELECT) should ever be issued once the
+    memory's tier comes back ORPHANED — that is the bug this guards.
+    """
+    def __init__(self, responses):
+        self._responses = list(responses)
+        self.executed = []
+
+    def execute(self, sql, params=None):
+        self.executed.append(sql)
+
+    def fetchone(self):
+        return self._responses.pop(0)
+
+def t_resolve_rejects_orphaned_memory_before_touching_signals():
+    cur = _FakeCursor([
+        ("principal", "ACTIVE"),      # agent_nodes: db_principal, status
+        ("principal",),                # current_user
+        ("ACTIVE",),                   # node_region_capabilities.status
+        ("ACTIVE",),                   # memory_regions.status (target)
+        ("some-region", "ORPHANED"),   # memories: region_id, tier
+    ])
+    expect_raises(MemoryOrphaned, lambda: resolve_recruitment(
+        cur, node_id="n", memory_id="m", target_region="other-region"))
+    assert len(cur.executed) == 5, (
+        f"expected exactly 5 queries (stopping at the memories row), "
+        f"got {len(cur.executed)}: {cur.executed}"
+    )
 
 # --- REC-012: sweep limit boundary --------------------------------------------
 

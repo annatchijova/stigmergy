@@ -406,7 +406,22 @@ def revoke_node(
     node_id: str,
     reason: str,
 ) -> AuthorityChange:
-    """Revoke a node and every active capability in one audited transaction."""
+    """
+    Revoke a node and every active capability in one audited transaction.
+
+    REC-019 (Round 3, R3-03 follow-through): recruitment_signals attributes
+    a vote to origin_region, not to the node that emitted it — capability
+    was checked once, at emit time, and a live PENDING signal votes in
+    every resolution until it is accepted or its TTL expires, regardless
+    of what happens to the emitting node afterward. That is deliberate
+    (a pheromone outlives the ant) for the common case where the region
+    still has OTHER active SIGNAL holders. But if revoking this node
+    empties a region of every active SIGNAL grant, its PENDING signals
+    are no longer backed by anyone this system currently trusts to speak
+    for that region — expiring them (never deleting; Invariant 8) closes
+    that specific case without touching signals from regions that still
+    have a live authorized voice.
+    """
     executor = require_authority_administrator(cur, node_id=executor_node_id)
     node_id = validate_node_id(node_id)
     reason = _require_text(reason, "reason")
@@ -433,10 +448,44 @@ def revoke_node(
         UPDATE node_region_capabilities
            SET status = 'REVOKED', revoked_at = now(), revoke_reason = %s
          WHERE node_id = %s AND status = 'ACTIVE'
+        RETURNING region_id, capability
         """,
         (reason, node_id),
     )
-    region_caps_revoked = cur.rowcount
+    revoked_region_caps = cur.fetchall()
+    region_caps_revoked = len(revoked_region_caps)
+
+    # Only SIGNAL grants matter here: RESOLVE/STORE/REINFORCE/OBSERVE
+    # govern other actions, not who may vote on the region's behalf.
+    signal_regions = sorted({
+        region_id for region_id, capability in revoked_region_caps
+        if capability == "SIGNAL"
+    })
+    orphaned_regions: list[str] = []
+    expired_signal_ids: list[str] = []
+    for region_id in signal_regions:
+        cur.execute(
+            """
+            SELECT 1 FROM node_region_capabilities
+             WHERE region_id = %s AND capability = 'SIGNAL' AND status = 'ACTIVE'
+             LIMIT 1
+            """,
+            (region_id,),
+        )
+        if cur.fetchone() is not None:
+            continue  # another node still speaks for this region
+        orphaned_regions.append(region_id)
+        cur.execute(
+            """
+            UPDATE recruitment_signals
+               SET status = 'EXPIRED', resolved_at = now()
+             WHERE origin_region = %s AND status = 'PENDING'
+            RETURNING id
+            """,
+            (region_id,),
+        )
+        expired_signal_ids.extend(str(row[0]) for row in cur.fetchall())
+
     append_event(
         cur,
         node_id=executor.node_id,
@@ -446,6 +495,8 @@ def revoke_node(
             "node_id": node_id,
             "node_capabilities_revoked": node_caps_revoked,
             "region_capabilities_revoked": region_caps_revoked,
+            "regions_left_without_signal_holder": orphaned_regions,
+            "recruitment_signals_expired": expired_signal_ids,
         },
     )
     return AuthorityChange(subject_node_id=node_id, changed=True)
