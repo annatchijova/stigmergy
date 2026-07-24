@@ -96,6 +96,19 @@ class RegionUnavailable(RuntimeError):
     """
 
 
+class MemoryOrphaned(RuntimeError):
+    """
+    The memory is currently tier ORPHANED (REC-018). recall() is the
+    sanctioned exit from ORPHANED — it seals a REDISCOVERED event
+    precisely because "no longer forgotten" is a fact worth its own
+    audit trail (ops/memories.py). Consensus migration used to skip
+    that: it locks the memory row, sees old_tier == 'ORPHANED', and
+    happily overwrote tier to 'REGIONAL' under a plain MEMORY_MIGRATED
+    event, silently resurrecting a memory nobody explicitly rediscovered.
+    Recruitment now refuses instead: recall() it first.
+    """
+
+
 @dataclass(frozen=True)
 class EmittedSignal:
     signal_id: str
@@ -391,6 +404,8 @@ def resolve_recruitment(
       ValueError        — target_region is the memory's current region: a
                           no-op migration would burn the cooldown and seal
                           a MEMORY_MIGRATED event for nothing (REC-005).
+      MemoryOrphaned    — the memory is tier ORPHANED; recall() it first
+                          so rediscovery is itself audited (REC-018).
       CooldownActive    — consensus reached but Invariant 6 rejected the
                           migration; nothing changed.
     """
@@ -407,11 +422,11 @@ def resolve_recruitment(
     # REC-011: existence AND status. The FK on memories.region_id would
     # reject a nonexistent target (as an opaque IntegrityError, mid-
     # UPDATE), but no constraint can reject a RETIRED or reshaping one.
-    # Phase 2 note: when split/merge lands with its CAS on status, this
-    # read will need FOR SHARE so a concurrent reshape cannot slip
-    # between this check and the migration UPDATE below.
+    # FOR SHARE locks the row for the rest of THIS transaction: no
+    # concurrent status change (region retirement, future split/merge CAS)
+    # can slip in between this check and the migration UPDATE below.
     cur.execute(
-        "SELECT status FROM memory_regions WHERE region_id = %s",
+        "SELECT status FROM memory_regions WHERE region_id = %s FOR SHARE",
         (target_region,),
     )
     region = cur.fetchone()
@@ -442,6 +457,18 @@ def resolve_recruitment(
             f"memory {memory_id} is already in region {target_region!r} — "
             "a same-region migration is a no-op that would burn the "
             "cooldown and seal a meaningless MEMORY_MIGRATED event."
+        )
+    # REC-018: ORPHANED is not just another prior tier. recall() is the
+    # one sanctioned exit, and it seals REDISCOVERED for exactly that
+    # reason. Letting consensus migrate an ORPHANED memory straight to
+    # REGIONAL would resurrect it under a plain MEMORY_MIGRATED event,
+    # bypassing the audit distinction the rest of the system relies on.
+    if old_tier == "ORPHANED":
+        raise MemoryOrphaned(
+            f"memory {memory_id} is ORPHANED — recruitment consensus does "
+            "not resurrect a memory. recall() it first (ORPHANED -> "
+            "SHORT_TERM, REDISCOVERED, its own audited event); only then "
+            "can it be recruited toward a new region."
         )
 
     # Decay computed HERE, in SQL, at read time, over immutable created_at.

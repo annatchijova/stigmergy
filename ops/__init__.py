@@ -26,6 +26,7 @@ from .recruitment import (
     CooldownActive,
     EmittedSignal,
     LiveSignal,
+    MemoryOrphaned,
     RegionUnavailable,
     compute_consensus,
     emit_signal,
@@ -59,7 +60,7 @@ __all__ = [
     "OrphanedMemory", "sweep_orphans",
     # recruitment
     "ConsensusOutcome", "CooldownActive", "EmittedSignal", "LiveSignal",
-    "RegionUnavailable", "compute_consensus", "emit_signal",
+    "MemoryOrphaned", "RegionUnavailable", "compute_consensus", "emit_signal",
     "expire_signals", "resolve_recruitment",
     # regions
     "CreatedRegion", "RegionExists", "create_region",

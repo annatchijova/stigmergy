@@ -51,7 +51,7 @@ from audit.merkle import create_snapshot, verify_ledger
 from ops.controller import observe, resonance_density
 from ops.memories import recall, reinforce, store, verify_provider
 from ops.recruitment import (
-    CooldownActive, RegionUnavailable, emit_signal, resolve_recruitment,
+    CooldownActive, MemoryOrphaned, RegionUnavailable, emit_signal, resolve_recruitment,
 )
 from ops.regions import RegionExists, create_region
 
@@ -220,7 +220,7 @@ def resolver_loop(dsn: str, stop: threading.Event, stats: Counter,
                     local["migrations" if outcome.reached
                           else "resolutions_not_reached"] += 1
                 except (CooldownActive, RegionUnavailable,
-                        LookupError, ValueError):
+                        LookupError, ValueError, MemoryOrphaned):
                     local["resolutions_deferred"] += 1
             stop.wait(1.0)
     finally:

@@ -24,9 +24,9 @@ Delivery semantics, and why they are safe:
     and returns not-reached — a no-op. Idempotence comes from the state
     machine, not from deduplication bookkeeping.
   - EXPECTED outcomes are results, not errors: consensus not reached,
-    CooldownActive, RegionUnavailable, LookupError each classify into
-    the summary and the batch still ACKs (200). The system preserved
-    uncertainty; there is nothing to retry.
+    CooldownActive, RegionUnavailable, LookupError, MemoryOrphaned each
+    classify into the summary and the batch still ACKs (200). The system
+    preserved uncertainty; there is nothing to retry.
   - An UNEXPECTED exception fails the Lambda invocation so the sink redelivers
     and CloudWatch counts an AWS/Lambda error —
     safe precisely because attempts are idempotent (above). Each attempt
@@ -48,7 +48,7 @@ from dataclasses import dataclass
 
 from audit.chain import run_in_transaction
 from ops.recruitment import (
-    CooldownActive, RegionUnavailable, resolve_recruitment,
+    CooldownActive, MemoryOrphaned, RegionUnavailable, resolve_recruitment,
 )
 from .common import (
     get_connection,
@@ -199,6 +199,12 @@ def _attempt(conn, node_id: str, attempt: ResolutionAttempt) -> str:
         return "region_unavailable"
     except LookupError:
         return "lookup_error"
+    except MemoryOrphaned:
+        # REC-018: the signal's origin recruited a memory that orphaned in
+        # the meantime. Expected under stigmergy's asynchronous decay, not
+        # an incident — recall() must rediscover it before anything can
+        # recruit it again.
+        return "orphaned"
     except ValueError:
         # Same-region target (REC-005): the memory already lives where
         # the signal points — a legitimate no-op, not an incident.
@@ -230,7 +236,7 @@ def handler(event, context=None):
 
     summary = {"migrated": 0, "not_reached": 0, "cooldown": 0,
                "region_unavailable": 0, "lookup_error": 0,
-               "already_there": 0}
+               "orphaned": 0, "already_there": 0}
     failures: list[str] = []
     # Validate even a heartbeat/no-op batch.  A valid invocation must never
     # look healthy if its STIGMERGY_NODE_ID and database service account drift.

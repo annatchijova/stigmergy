@@ -59,12 +59,29 @@ index remains the independent anti-flood guard. This is not Byzantine
 consensus: distinct compromised credentials can still represent distinct
 legitimate regions.
 
+**A revoked node's already-emitted vote is not retracted (Round 3, R3-03).**
+`recruitment_signals` records `origin_region`, not the emitting node —
+capability is enforced at write time (`emit_signal` requires an active
+`SIGNAL` grant), never re-checked at resolution time. `revoke_node`
+revokes `agent_nodes`/`node_capabilities`/`node_region_capabilities` but
+does not touch `recruitment_signals`: a `PENDING` signal emitted before
+revocation keeps voting in any later `resolve_recruitment` call until it
+is accepted or expires on its own TTL. This is consistent with the
+stigmergy metaphor (a pheromone outlives the ant that laid it) and with
+the audit chain's own stance (it records who acted, not who is
+*currently* authorized) — but it is a real design choice, not yet a
+reviewed one, and closing it the other way would need a schema column
+attributing each signal to its emitting node.
+
 ## Deferred to Phase 2
 
 - **Region split/merge** — requires explicit CAS serialization on
-  `memory_regions.status`. Until then, `resolve_recruitment` checks
-  region status without `FOR SHARE`; the code comments mark where the
-  lock must appear when reshaping lands.
+  `memory_regions.status`. `resolve_recruitment` already reads that
+  status `FOR SHARE` (Round 3 red team, REC-011 follow-through) so a
+  concurrent status change cannot slip between the check and the
+  migration `UPDATE`; the reshape operation itself — the thing that
+  would actually change `status` after creation — still does not exist
+  (`ops/regions.py` is create-only today).
 - **GLOBAL-tier policy** — GLOBAL memories do not orphan (excluded by
   design from the sweep) and a recruitment migration demotes them to
   REGIONAL (visible in the `MEMORY_MIGRATED` payload as
