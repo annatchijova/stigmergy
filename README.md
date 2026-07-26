@@ -8,9 +8,54 @@ Merkle ledger. Convergence without a coordinator, verifiable without a
 central authority.
 
 Built for the **CockroachDB × AWS — Build with Agentic Memory**
-hackathon. Apache 2.0. Design document: `ARCHITECTURE.md`. Schema (the
-real spec — most invariants are constraints, not conventions):
-`schema.sql`.
+hackathon. Apache 2.0.
+
+## Why this exists
+
+Most multi-agent systems coordinate through orchestration: a controller
+process, a message bus, or an LLM deciding who does what next. STIGMERGY
+coordinates through memory instead. Agents never talk to each other —
+each one only reads and writes shared state in CockroachDB, the way ants
+coordinate through pheromone trails left in a shared environment (the
+biological phenomenon the project is named after).
+
+An agent notices a memory sitting away from where it belongs and writes
+a recruitment signal. Other agents read that signal and vote with exact
+`Fraction` weights; once consensus crosses a threshold, the memory
+migrates home under a cooldown. No agent ever instructs another agent to
+do anything — the database is the only channel, and every step that
+changes shared state is sealed into a verifiable audit trail as it
+happens.
+
+```
+   Agent A        Agent B        Agent C
+      │               │               │
+      └───────┬───────┴───────┬───────┘
+              │               │
+              ▼               ▼
+      ┌──────────────────────────┐
+      │       CockroachDB        │  <- the only channel between agents
+      │  memories · recruitment  │
+      │  signals · hash chains   │
+      └──────────────────────────┘
+             │
+             ▼
+  recruitment signal observed
+             │
+             ▼
+  exact-Fraction weighted consensus
+             │
+             ▼
+  migration under cooldown
+             │
+             ▼
+  per-node hash chain → Merkle ledger
+```
+
+No orchestrator, no message queue, no agent-to-agent call — every arrow
+above is a read or a write against CockroachDB. Design document:
+`ARCHITECTURE.md`. Schema (the real spec — most invariants are
+constraints, not conventions): `schema.sql`.
 
 ## Authority after the MNEME red-team transfer
 
