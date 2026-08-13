@@ -162,6 +162,46 @@ certainty, and the demo obeys its own Failure philosophy.
 `--local-resolver` is a labeled, demo-only polling stand-in for the
 changefeed Lambda so the demo runs on a laptop without AWS.
 
+## Running the field console (no database, no install)
+
+`demo/console.html` opens directly in a browser — no server, no build, no
+dependencies — and runs the field live: three agents recall, reinforce, emit
+recruitment signals, and migrate memories by consensus, with nothing passing
+between them but shared state.
+
+What it reproduces exactly, not approximately:
+
+- **The decision arithmetic.** Reinforcement `c' = c + (1−c)·1/5`, hysteresis
+  EMA with `β=1/4` and enter `3/5` / exit `2/5`, consensus
+  `vigor_for ≥ 1/2 · live_signals` — all in BigInt rationals. No float reaches
+  a verdict; the one float is the read-time decay that gates liveness, exactly
+  as in `ops/recruitment.py`.
+- **The audit construction.** Canonical JSON (sorted keys, no whitespace,
+  decimals as fixed-point strings at scale 10), `entry_hash =
+  sha256(prev_hash ‖ envelope)`, genesis `sha256("STIGMERGY_GENESIS")`, Merkle
+  leaves `sha256(node_id ":" head)`. SHA-256 is implemented in the page (so it
+  works from `file://`) and matches the standard test vectors. **Rewrite any
+  payload in the page and verification names the forgery**, giving the sealed
+  and recomputed hashes and the sequence number where the chain stops relinking.
+
+What it is not: a CockroachDB deployment, a changefeed, or a Lambda. There is
+no database, no authority model checking principals, and the resolver is an
+in-page loop — the same labeled stand-in `--local-resolver` is. The migration
+cooldown is compressed from five minutes to eight seconds. The page says all of
+this on its face.
+
+Two honest deviations, both stated in the page:
+
+- The console seeds **its own corpus**, not `demo/corpus.py`. The cluster corpus
+  is written for the pinned MiniLM provider, and under a non-semantic provider
+  `run_demo.py` refuses to narrate convergence at all. Rather than fake a
+  semantic claim, the console uses a corpus where lexical distance is a truthful
+  signal about the three regions.
+- Recall therefore runs a tf-idf cosine, not MiniLM. To swap in the real
+  vectors, run `python -m tools.bake_embeddings` (needs
+  `pip install sentence-transformers`); it writes `demo/minilm_vectors.js`,
+  which the page picks up automatically and relabels itself accordingly.
+
 ## Deploying the Lambdas
 
 The repository includes `infra/template.json`, which provisions separately
