@@ -39,6 +39,7 @@ same exact-arithmetic code the tests pin.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import random
 import threading
@@ -46,6 +47,7 @@ import time
 from collections import Counter
 from fractions import Fraction
 
+from audit.bundle import export_bundle, verify_bundle
 from audit.chain import run_in_transaction, verify_chain
 from audit.merkle import create_snapshot, verify_ledger
 from ops.controller import observe, resonance_density
@@ -231,7 +233,7 @@ def resolver_loop(dsn: str, stop: threading.Event, stats: Counter,
 
 # -------------------------------------------------------------- report --
 
-def report(dsn: str, provider, stats: Counter) -> None:
+def report(dsn: str, provider, stats: Counter, bundle_path: str | None = None) -> None:
     conn = connect(dsn)
     try:
         with conn.cursor() as cur:
@@ -284,6 +286,25 @@ def report(dsn: str, provider, stats: Counter) -> None:
               "Every transition above is in a hash chain."
               if ok_all and ledger.ok else
               "\nINTEGRITY FAILURE — see details above.")
+
+        if bundle_path:
+            bundle = run_in_transaction(
+                conn, lambda cur: export_bundle(cur, note="demo run"))
+            with open(bundle_path, "w", encoding="utf-8") as fh:
+                json.dump(bundle, fh, ensure_ascii=False, sort_keys=True,
+                          separators=(",", ":"))
+            v = verify_bundle(bundle)
+            entries = sum(len(c) for c in bundle["chains"].values())
+            print(f"\n[bundle] {bundle_path} — {len(bundle['memories'])} memories, "
+                  f"{len(bundle['chains'])} node chains, {entries} entries, "
+                  f"{len(bundle['snapshots'])} snapshots")
+            print(f"[bundle] seal {bundle['bundle_sha256']}")
+            # Verify what we just wrote, before anyone is asked to believe it.
+            print("[bundle] " + ("self-check VERIFIED (B1-B6)" if v.ok else
+                  "SELF-CHECK FAILED: " +
+                  "; ".join(f"{c.id} {c.detail}" for c in v.failed())))
+            print("[bundle] open it in demo/console.html, or run "
+                  f"python -m tools.verify_bundle {bundle_path}")
     finally:
         conn.close()
 
@@ -304,6 +325,8 @@ def main() -> None:
     ap.add_argument("--local-resolver", action="store_true",
                     help="run the polling stand-in for the changefeed Lambda")
     ap.add_argument("--skip-seed", action="store_true")
+    ap.add_argument("--bundle", metavar="PATH",
+                    help="write a sealed evidence bundle of this run")
     args = ap.parse_args()
     if not args.dsn:
         raise SystemExit("--dsn or STIGMERGY_DSN is required for reporting.")
@@ -348,7 +371,7 @@ def main() -> None:
         stop.set()
         resolver.join(timeout=5.0)
 
-    report(args.dsn, provider, stats)
+    report(args.dsn, provider, stats, bundle_path=args.bundle)
 
 
 if __name__ == "__main__":

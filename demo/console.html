@@ -1,0 +1,2051 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STIGMERGY — Field Console</title>
+<meta name="description" content="A runnable STIGMERGY field: autonomous agents coordinating only through shared state, exact-Fraction decisions, and a real hash-chained audit record you can try to forge.">
+<style>
+:root{
+  /* the substrate — where working state lives, and can still change */
+  --sand:#DCD3C0;
+  --sand-2:#D3C9B3;
+  --basin:#C6BBA1;
+  --soil:#3B342A;
+  --soil-2:#6B6152;
+  --soil-3:#8E8677;
+  --hair:rgba(59,52,42,.22);
+  --hair-soft:rgba(59,52,42,.11);
+
+  /* the three themes — a memory is inked with the region it BELONGS to */
+  --cooking:#A8481F;
+  --astronomy:#38477E;
+  --databases:#2C6A57;
+
+  /* the seal — where the record lives, and can never change */
+  --carbon:#15171B;
+  --carbon-2:#1D2026;
+  --bone:#E9E5DA;
+  --bone-2:#9AA0A6;
+  --bone-3:#646B72;
+  --seal:#C9A44C;
+  --breach:#D2513A;
+  --pass:#6FAE84;
+  --hair-c:rgba(233,229,218,.14);
+
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:"Inter","Segoe UI",system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--sand);
+  color:var(--soil);
+  font-family:var(--sans);
+  font-size:15px;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--soil);outline-offset:3px}
+.carbon :focus-visible{outline-color:var(--seal)}
+
+/* ---------- language ---------- */
+.es{display:none}
+body.lang-es .es{display:revert}
+body.lang-es .en{display:none}
+body.lang-es span.es{display:inline}
+span.es{display:none}
+
+/* ---------- shared type ---------- */
+.label{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.24em;
+  text-transform:uppercase;color:var(--soil-3);
+}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ---------- masthead ---------- */
+.masthead{
+  position:sticky;top:0;z-index:60;
+  display:flex;align-items:center;gap:18px;
+  padding:12px 22px;
+  background:rgba(220,211,192,.93);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--hair);
+}
+.wordmark{
+  font-size:15px;font-weight:800;letter-spacing:-.01em;
+  text-transform:lowercase;
+}
+.wordmark span{color:var(--soil-3);font-weight:500}
+.masthead nav{margin-left:auto;display:flex;align-items:center;gap:14px}
+.masthead nav a{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--soil-2);text-decoration:none;
+}
+.masthead nav a:hover{color:var(--soil)}
+.langswitch{display:flex;border:1px solid var(--hair);border-radius:2px;overflow:hidden}
+.langswitch button{
+  appearance:none;border:none;background:transparent;cursor:pointer;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;
+  padding:5px 9px;color:var(--soil-3);
+}
+.langswitch button.on{background:var(--soil);color:var(--sand)}
+
+/* ---------- disclosure ---------- */
+.disclosure{
+  display:flex;gap:14px;align-items:flex-start;
+  padding:11px 22px;
+  background:var(--sand-2);
+  border-bottom:1px solid var(--hair);
+  font-size:12.5px;line-height:1.5;color:var(--soil-2);
+}
+.disclosure b{color:var(--soil);font-weight:700}
+.disclosure .tagmark{
+  flex:none;margin-top:2px;
+  font-family:var(--mono);font-size:9px;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--sand);
+  background:var(--soil);padding:3px 7px;border-radius:2px;
+}
+
+/* ---------- masthead title block ---------- */
+.opening{padding:34px 22px 20px;max-width:1500px;margin:0 auto}
+.opening h1{
+  font-size:clamp(30px,5.4vw,58px);
+  font-weight:800;letter-spacing:-.035em;line-height:.98;
+  text-transform:lowercase;max-width:16ch;
+}
+.opening h1 em{font-style:normal;color:var(--soil-3)}
+.opening p{
+  margin-top:14px;max-width:62ch;font-size:15.5px;color:var(--soil-2);
+}
+
+/* ---------- console layout ---------- */
+.console{
+  max-width:1500px;margin:0 auto;padding:14px 22px 30px;
+  display:grid;grid-template-columns:minmax(0,1fr) 356px;gap:18px;align-items:stretch;
+}
+.fieldcol{display:flex;flex-direction:column;min-height:0}
+@media(max-width:1080px){.console{grid-template-columns:minmax(0,1fr)}}
+
+.fieldwrap{
+  position:relative;border:1px solid var(--hair);border-radius:3px;
+  background:
+    radial-gradient(ellipse at 50% 42%,rgba(255,252,244,.5),transparent 62%),
+    var(--sand-2);
+  overflow:hidden;flex:1;min-height:clamp(420px,58vh,660px);
+}
+#field{position:absolute;inset:0;display:block;width:100%;height:100%}
+.fieldhead{
+  position:absolute;top:0;left:0;right:0;
+  display:flex;justify-content:space-between;align-items:center;
+  padding:10px 14px;pointer-events:none;
+}
+.legend{display:flex;gap:14px;flex-wrap:wrap}
+.legend i{
+  display:inline-block;width:8px;height:8px;border-radius:50%;
+  margin-right:5px;vertical-align:-1px;
+}
+.legend span{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--soil-2)}
+
+/* ---------- transport ---------- */
+.transport{
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  padding:11px 14px;border-top:1px solid var(--hair);
+  background:rgba(255,252,244,.35);
+}
+button.act{
+  appearance:none;cursor:pointer;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;
+  padding:9px 16px;border-radius:2px;
+  border:1px solid var(--soil);background:var(--soil);color:var(--sand);
+  transition:background .18s,color .18s,opacity .18s;
+}
+button.act:hover{background:#2A241C}
+button.act.ghost{background:transparent;color:var(--soil);border-color:var(--hair)}
+button.act.ghost:hover{background:rgba(59,52,42,.07)}
+button.act:disabled{opacity:.32;cursor:default}
+.tickread{margin-left:auto;display:flex;gap:16px;align-items:baseline}
+.tickread b{font-family:var(--mono);font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+
+/* ---------- rail panels ---------- */
+.rail{display:flex;flex-direction:column;gap:14px}
+.panel{border:1px solid var(--hair);border-radius:3px;background:rgba(255,252,244,.38)}
+.panel > h2{
+  display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  padding:10px 13px;border-bottom:1px solid var(--hair-soft);
+  font-family:var(--mono);font-size:9.5px;font-weight:600;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--soil-2);
+}
+.panel > h2 .cnt{font-size:9.5px;color:var(--soil-3);letter-spacing:.12em}
+.panel .body{padding:11px 13px}
+
+.agent{padding:9px 0;border-bottom:1px dashed var(--hair-soft)}
+.agent:last-child{border-bottom:none}
+.agent .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.agent .nm{font-family:var(--mono);font-size:12px}
+.mode{
+  font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;
+  padding:2px 7px;border-radius:2px;border:1px solid var(--hair);color:var(--soil-2);
+}
+.mode.dwell{background:var(--soil);color:var(--sand);border-color:var(--soil)}
+.agent .meta{margin-top:4px;font-family:var(--mono);font-size:10.5px;color:var(--soil-3);
+  font-variant-numeric:tabular-nums}
+.emabar{margin-top:6px;height:3px;background:rgba(59,52,42,.12);position:relative}
+.emabar i{position:absolute;inset:0 auto 0 0;background:var(--soil-2);transition:width .4s ease}
+.emabar u{position:absolute;top:-3px;bottom:-3px;width:1px;background:var(--soil);opacity:.5}
+
+.sig{padding:8px 0;border-bottom:1px dashed var(--hair-soft)}
+.sig:last-child{border-bottom:none}
+.sig .l1{display:flex;justify-content:space-between;gap:8px;font-family:var(--mono);font-size:11px}
+.sig .l2{font-family:var(--mono);font-size:10px;color:var(--soil-3);margin-top:2px}
+.vig{margin-top:5px;height:3px;background:rgba(59,52,42,.12);position:relative;overflow:hidden}
+.vig i{position:absolute;inset:0 auto 0 0;background:var(--soil-2)}
+.empty{font-family:var(--mono);font-size:10.5px;color:var(--soil-3);padding:4px 0}
+
+.score{display:flex;align-items:baseline;gap:10px}
+.score b{font-family:var(--mono);font-size:34px;font-weight:600;letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums;line-height:1}
+.score .of{font-family:var(--mono);font-size:12px;color:var(--soil-3)}
+.mislist{margin-top:10px;display:flex;flex-direction:column;gap:5px}
+.mis{display:flex;gap:8px;align-items:center;font-family:var(--mono);font-size:10.5px}
+.mis .dot{width:7px;height:7px;border-radius:50%;flex:none}
+.mis .where{color:var(--soil-3)}
+.mis.home .where{color:var(--databases)}
+.aside{margin-top:10px;padding-top:9px;border-top:1px dashed var(--hair-soft);
+  font-size:11.5px;line-height:1.5;color:var(--soil-3)}
+
+/* ---------- the seam + carbon record ---------- */
+.seam{
+  max-width:1500px;margin:0 auto;padding:0 22px;
+}
+.seam .line{height:1px;background:var(--hair)}
+.carbon{
+  background:var(--carbon);color:var(--bone);
+  border-top:1px solid var(--carbon-2);
+  padding:30px 0 46px;
+  scroll-margin-top:56px;   /* clear the sticky masthead on anchor jumps */
+}
+.carbon .inner{max-width:1500px;margin:0 auto;padding:0 22px}
+.carbon h2.ttl{
+  font-size:clamp(22px,3.2vw,34px);font-weight:800;letter-spacing:-.03em;
+  text-transform:lowercase;color:var(--bone);
+}
+.carbon .lede{margin-top:8px;max-width:64ch;color:var(--bone-2);font-size:14.5px}
+.carbon .label{color:var(--bone-3)}
+
+.recordbar{
+  display:flex;gap:8px;flex-wrap:wrap;align-items:center;
+  margin-top:20px;padding-bottom:14px;border-bottom:1px solid var(--hair-c);
+}
+.carbon button.act{border-color:var(--hair-c);background:transparent;color:var(--bone)}
+.carbon button.act:hover{background:rgba(233,229,218,.08)}
+.carbon button.act.gold{border-color:rgba(201,164,76,.6);color:var(--seal)}
+.carbon button.act.gold:hover{background:rgba(201,164,76,.12)}
+.carbon button.act.danger{border-color:rgba(210,81,58,.55);color:#EE9482}
+.carbon button.act.danger:hover{background:rgba(210,81,58,.14)}
+
+.recordgrid{
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:20px;margin-top:18px;
+}
+@media(max-width:960px){.recordgrid{grid-template-columns:minmax(0,1fr)}}
+
+.nodecard{border:1px solid var(--hair-c);border-radius:3px;margin-bottom:10px}
+.nodecard header{
+  display:flex;justify-content:space-between;align-items:center;gap:10px;
+  padding:9px 12px;border-bottom:1px solid var(--hair-c);
+}
+.nodecard .nid{font-family:var(--mono);font-size:11.5px;color:var(--bone)}
+.nodecard .head{font-family:var(--mono);font-size:10px;color:var(--seal)}
+.verdict{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase}
+.verdict.ok{color:var(--pass)} .verdict.bad{color:var(--breach)} .verdict.idle{color:var(--bone-3)}
+.entries{max-height:230px;overflow-y:auto;scrollbar-width:thin;
+  scrollbar-color:var(--bone-3) transparent}
+.entry{
+  display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:baseline;
+  padding:6px 12px;border-bottom:1px solid rgba(233,229,218,.06);cursor:pointer;
+  font-family:var(--mono);font-size:11px;
+}
+.entry:hover{background:rgba(233,229,218,.05)}
+.entry.sel{background:rgba(201,164,76,.1)}
+.entry.fresh{animation:strike 1.1s ease-out}
+@keyframes strike{
+  0%{background:rgba(201,164,76,.42);box-shadow:inset 2px 0 0 var(--seal)}
+  100%{background:transparent;box-shadow:inset 2px 0 0 transparent}
+}
+.entry .sq{color:var(--bone-3);font-variant-numeric:tabular-nums}
+.entry .ev{color:var(--bone)}
+.entry .hs{color:var(--seal);font-size:10px}
+.entry.broken .ev{color:var(--breach)}
+.entry.tampered .ev::after{content:" ✎";color:var(--breach)}
+
+.detail{border:1px solid var(--hair-c);border-radius:3px;position:sticky;top:66px}
+.detail header{padding:9px 12px;border-bottom:1px solid var(--hair-c);
+  display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.detail .db{padding:12px;font-family:var(--mono);font-size:11px;line-height:1.65}
+.kv{display:grid;grid-template-columns:104px minmax(0,1fr);gap:6px 10px;margin-bottom:12px}
+.kv dt{color:var(--bone-3);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+.kv dd{color:var(--bone);word-break:break-all}
+.kv dd.gold{color:var(--seal)}
+pre.payload{
+  background:var(--carbon-2);border:1px solid var(--hair-c);border-radius:2px;
+  padding:10px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;
+  color:var(--bone-2);font-size:10.5px;line-height:1.6;
+}
+.recipe{margin-top:12px;color:var(--bone-3);font-size:10.5px;line-height:1.7}
+.recipe b{color:var(--bone-2);font-weight:400}
+
+.forge{margin-top:12px;border-top:1px solid var(--hair-c);padding-top:12px}
+.forge label{display:block;font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--bone-3);margin-bottom:5px}
+.forge input{
+  width:100%;font-family:var(--mono);font-size:11.5px;
+  background:var(--carbon-2);color:var(--bone);
+  border:1px solid var(--hair-c);border-radius:2px;padding:8px 9px;
+}
+.forge .rowbtns{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
+
+.verdictstrip{
+  margin-top:18px;padding:14px 16px;border:1px solid var(--hair-c);border-radius:3px;
+  font-family:var(--mono);font-size:12px;line-height:1.7;color:var(--bone-2);
+}
+.verdictstrip.ok{border-color:rgba(111,174,132,.45)}
+.verdictstrip.bad{border-color:rgba(210,81,58,.5);background:rgba(210,81,58,.07)}
+.verdictstrip .hl{color:var(--bone)}
+.verdictstrip .g{color:var(--seal)}
+.verdictstrip .r{color:var(--breach)}
+.verdictstrip .p{color:var(--pass)}
+
+/* ---------- sealed bundle verdict ---------- */
+#bundlechecks:empty{display:none}
+#bundlechecks{margin-top:18px;border:1px solid var(--hair-c);border-radius:3px;overflow:hidden}
+.bundlehead{display:flex;gap:18px;align-items:flex-start;justify-content:space-between;
+  flex-wrap:wrap;padding:14px 16px;border-bottom:1px solid var(--hair-c);
+  background:var(--carbon-2)}
+.bseal{font-family:var(--mono);font-size:11.5px;color:var(--seal);word-break:break-all;margin-top:4px}
+.bmeta{font-family:var(--mono);font-size:10.5px;color:var(--bone-3);margin-top:5px}
+.bverdict{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+  padding:5px 11px;border:1px solid var(--hair-c);border-radius:2px;white-space:nowrap}
+.bverdict.ok{color:var(--pass);border-color:rgba(111,174,132,.5)}
+.bverdict.bad{color:var(--breach);border-color:rgba(210,81,58,.55)}
+.blist{padding:6px 0}
+.bcheck{display:grid;grid-template-columns:34px minmax(0,1fr) 54px;gap:12px;align-items:baseline;
+  padding:7px 16px;font-family:var(--mono);font-size:11.5px}
+.bcheck .bid{color:var(--bone-3)}
+.bcheck .bclaim{color:var(--bone-2)}
+.bcheck .bmark{text-align:right;font-size:9.5px;letter-spacing:.16em;color:var(--pass)}
+.bcheck.fail .bmark{color:var(--breach)}
+.bcheck.fail .bclaim{color:var(--bone)}
+.bcheck .bdetail{grid-column:2/4;color:#EFA79A;font-size:10.5px;margin-top:2px;word-break:break-word}
+.bnote{padding:12px 16px;border-top:1px solid var(--hair-c);font-size:12px;line-height:1.65;
+  color:var(--bone-3)}
+.bnote b{color:var(--bone-2);font-weight:400}
+body.mode-bundle .transport .tickread{opacity:.65}
+
+.merkle{margin-top:14px;display:flex;flex-wrap:wrap;gap:18px;align-items:baseline;
+  font-family:var(--mono);font-size:11px;color:var(--bone-2)}
+.merkle b{color:var(--seal);font-weight:400;word-break:break-all}
+
+.footnote{
+  max-width:1500px;margin:0 auto;padding:26px 22px 0;
+  font-size:12.5px;color:var(--bone-3);line-height:1.7;
+}
+.footnote a{color:var(--bone-2)}
+.footnote h3{font-family:var(--mono);font-size:9.5px;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--bone-3);margin-bottom:8px}
+.footnote ul{margin:0;padding-left:16px}
+.footnote li{margin-bottom:5px}
+
+@media(max-width:660px){
+  .masthead{gap:10px;padding:10px 14px}
+  .wordmark span{display:none}
+  .masthead nav{gap:11px}
+  .masthead nav a{font-size:8.5px;letter-spacing:.1em}
+  .disclosure{padding:10px 14px;font-size:12px;gap:10px}
+  .opening{padding:24px 14px 12px}
+  .console{padding:10px 14px 22px;gap:12px}
+  .legend{gap:9px}
+  .legend span{font-size:8.5px;letter-spacing:.1em}
+  .transport{padding:10px}
+  .tickread{width:100%;margin-left:0;justify-content:space-between}
+  .carbon{padding:22px 0 34px}
+  .carbon .inner,.footnote{padding-left:14px;padding-right:14px}
+  .detail{position:static}
+  .kv{grid-template-columns:88px minmax(0,1fr)}
+}
+@media(prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;transition-duration:.01ms !important}
+  html{scroll-behavior:auto}
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wordmark">stigmergy <span>· field console</span></div>
+  <nav>
+    <a href="../index.html"><span class="en">Overview</span><span class="es">Resumen</span></a>
+    <a href="field_viewer.html"><span class="en">Custody replay</span><span class="es">Replay de custodia</span></a>
+    <a href="https://github.com/annatchijova/stigmergy" target="_blank" rel="noopener">GitHub</a>
+    <div class="langswitch">
+      <button id="lang-en" class="on">EN</button><button id="lang-es">ES</button>
+    </div>
+  </nav>
+</header>
+
+<div class="disclosure">
+  <span class="tagmark">in-browser</span>
+  <div>
+    <span class="en"><b>This runs the arithmetic, not the cluster.</b> Every decision below — reinforcement,
+    hysteresis, consensus, cooldown — is the same exact-rational math the Python modules use, reimplemented
+    here in BigInt, plus real SHA-256 hash chains you can try to forge. It is <b>not</b> connected to
+    CockroachDB, and the five-minute migration cooldown is compressed to eight seconds so a demo fits in a
+    minute. The cluster run is <span class="num">python -m demo.run_demo</span>.</span>
+    <span class="es"><b>Esto ejecuta la aritmética, no el clúster.</b> Cada decisión de abajo — refuerzo,
+    histéresis, consenso, cooldown — es la misma matemática racional exacta de los módulos Python,
+    reimplementada acá en BigInt, más cadenas de hash SHA-256 reales que podés intentar falsificar.
+    <b>No</b> está conectado a CockroachDB, y el cooldown de migración de cinco minutos está comprimido a
+    ocho segundos para que la demo entre en un minuto. La corrida contra el clúster es
+    <span class="num">python -m demo.run_demo</span>.</span>
+  </div>
+</div>
+
+<section class="opening">
+  <h1>
+    <span class="en">thirty memories, three agents, <em>nobody in charge</em></span>
+    <span class="es">treinta memorias, tres agentes, <em>nadie a cargo</em></span>
+  </h1>
+  <p>
+    <span class="en">Six of these memories were filed in the wrong region on purpose. No agent is told which
+    ones, and no agent can tell another agent anything — they only read and write shared state. Press run and
+    watch the field sort itself out. Then open the record underneath and try to change what happened.</span>
+    <span class="es">Seis de estas memorias fueron archivadas en la región equivocada a propósito. A ningún
+    agente se le dice cuáles, y ningún agente puede decirle nada a otro — sólo leen y escriben estado
+    compartido. Apretá ejecutar y mirá cómo el campo se ordena solo. Después abrí el registro de abajo e
+    intentá cambiar lo que pasó.</span>
+  </p>
+</section>
+
+<section class="console">
+  <div class="fieldcol">
+    <div class="fieldwrap">
+      <canvas id="field"></canvas>
+      <div class="fieldhead">
+        <div class="legend" id="legend"></div>
+      </div>
+    </div>
+    <div class="transport">
+      <button class="act" id="btn-run"><span class="en">Run the field</span><span class="es">Ejecutar el campo</span></button>
+      <button class="act ghost" id="btn-step"><span class="en">One round</span><span class="es">Una ronda</span></button>
+      <button class="act ghost" id="btn-reset"><span class="en">Reseed</span><span class="es">Resembrar</span></button>
+      <button class="act ghost" id="btn-load"><span class="en">Open a sealed bundle</span><span class="es">Abrir un bundle sellado</span></button>
+      <input id="bundle-file" type="file" accept="application/json,.json" hidden>
+      <button class="act ghost" id="btn-sim" hidden><span class="en">Back to the simulation</span><span class="es">Volver a la simulación</span></button>
+      <div class="tickread">
+        <div><span class="label"><span class="en">rounds</span><span class="es">rondas</span></span> <b id="read-tick">0</b></div>
+        <div><span class="label"><span class="en">sealed events</span><span class="es">eventos sellados</span></span> <b id="read-events">0</b></div>
+      </div>
+    </div>
+  </div>
+
+  <aside class="rail">
+    <section class="panel">
+      <h2><span id="agents-title"><span class="en">Agents</span><span class="es">Agentes</span></span>
+        <span class="cnt" id="agents-note"><span class="en">no channel between them</span><span class="es">sin canal entre ellos</span></span></h2>
+      <div class="body" id="agents"></div>
+    </section>
+
+    <section class="panel">
+      <h2><span id="signals-title"><span class="en">Live recruitment signals</span><span class="es">Señales de reclutamiento vivas</span></span>
+        <span class="cnt" id="sig-count">0</span></h2>
+      <div class="body" id="signals"></div>
+    </section>
+
+    <section class="panel">
+      <h2><span id="score-title"><span class="en">Misplaced memories home</span><span class="es">Memorias mal ubicadas en casa</span></span>
+        <span class="cnt" id="score-note"><span class="en">by consensus only</span><span class="es">sólo por consenso</span></span></h2>
+      <div class="body" id="scorebody">
+        <div class="score"><b id="score-n">0</b><span class="of">/ 6</span></div>
+        <div class="mislist" id="mislist"></div>
+        <div class="aside" id="churn"></div>
+      </div>
+    </section>
+  </aside>
+</section>
+
+<div class="seam"><div class="line"></div></div>
+
+<section class="carbon">
+  <div class="inner">
+    <h2 class="ttl"><span class="en">the record underneath</span><span class="es">el registro de abajo</span></h2>
+    <p class="lede">
+      <span class="en">Every state change above sealed itself into a per-node hash chain as it happened —
+      same transaction, no separate logger. These are real SHA-256 chains over canonical JSON, computed in
+      this page. Edit any payload and ask the chain again.</span>
+      <span class="es">Cada cambio de estado de arriba se selló en una cadena de hash por nodo en el mismo
+      momento — misma transacción, sin logger aparte. Son cadenas SHA-256 reales sobre JSON canónico,
+      calculadas en esta página. Editá cualquier payload y volvé a preguntarle a la cadena.</span>
+    </p>
+
+    <div class="recordbar">
+      <button class="act gold" id="btn-verify"><span class="en">Verify every chain</span><span class="es">Verificar cada cadena</span></button>
+      <button class="act" id="btn-export"><span class="en">Export this run as a bundle</span><span class="es">Exportar esta corrida como bundle</span></button>
+      <button class="act" id="btn-snapshot"><span class="en">Take Merkle snapshot</span><span class="es">Tomar snapshot Merkle</span></button>
+      <button class="act danger" id="btn-forge"><span class="en">Forge the selected entry</span><span class="es">Falsificar la entrada elegida</span></button>
+      <button class="act" id="btn-restore"><span class="en">Undo the forgery</span><span class="es">Deshacer la falsificación</span></button>
+    </div>
+
+    <div id="bundlechecks"></div>
+
+    <div class="recordgrid">
+      <div id="nodes"></div>
+      <div>
+        <div class="detail">
+          <header>
+            <span class="label"><span class="en">entry</span><span class="es">entrada</span></span>
+            <span class="label" id="detail-node">—</span>
+          </header>
+          <div class="db" id="detail"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="verdictstrip" id="verdict">
+      <span class="en">Nothing verified yet. Run the field, then verify.</span>
+      <span class="es">Todavía no se verificó nada. Ejecutá el campo y después verificá.</span>
+    </div>
+
+    <div class="merkle" id="merkle"></div>
+
+    <div class="footnote">
+      <h3><span class="en">What this page does and does not claim</span><span class="es">Qué afirma y qué no afirma esta página</span></h3>
+      <ul>
+        <li><span class="en"><b>Claimed:</b> the decision math is exact and identical to the Python modules —
+          reinforcement <span class="num">c' = c + (1−c)·1/5</span>, hysteresis EMA <span class="num">β=1/4</span>
+          with enter <span class="num">3/5</span> / exit <span class="num">2/5</span>, consensus
+          <span class="num">vigor_for ≥ 1/2 · live_signals</span>, all in BigInt rationals with no float
+          anywhere in a verdict.</span>
+          <span class="es"><b>Se afirma:</b> la matemática de decisión es exacta e idéntica a la de los módulos
+          Python — refuerzo <span class="num">c' = c + (1−c)·1/5</span>, histéresis EMA <span class="num">β=1/4</span>
+          con entrada <span class="num">3/5</span> / salida <span class="num">2/5</span>, consenso
+          <span class="num">vigor_for ≥ 1/2 · señales_vivas</span>, todo en racionales BigInt sin ningún float
+          en un veredicto.</span></li>
+        <li><span class="en"><b>Claimed:</b> the hash chains are genuine — canonical JSON with sorted keys and
+          no whitespace, decimals as fixed-point strings at scale 10, entry hash
+          <span class="num">sha256(prev_hash ‖ envelope)</span>, genesis
+          <span class="num">sha256("STIGMERGY_GENESIS")</span>, Merkle leaves
+          <span class="num">sha256(node_id ":" head)</span>. The same bytes the cluster would hash.</span>
+          <span class="es"><b>Se afirma:</b> las cadenas de hash son genuinas — JSON canónico con claves
+          ordenadas y sin espacios, decimales como strings de punto fijo a escala 10, hash de entrada
+          <span class="num">sha256(prev_hash ‖ envelope)</span>, génesis
+          <span class="num">sha256("STIGMERGY_GENESIS")</span>, hojas Merkle
+          <span class="num">sha256(node_id ":" head)</span>. Los mismos bytes que hashearía el clúster.</span></li>
+        <li><span class="en"><b>Not claimed:</b> this is a CockroachDB deployment, a changefeed, or an AWS
+          Lambda. There is no database here, no authority model enforcing principals, and the resolver is an
+          in-page loop — the same labeled stand-in the local demo calls
+          <span class="num">--local-resolver</span>.</span>
+          <span class="es"><b>No se afirma:</b> que esto sea un despliegue de CockroachDB, un changefeed ni una
+          Lambda de AWS. Acá no hay base de datos, no hay modelo de autoridad validando principals, y el
+          resolvedor es un loop en la página — el mismo sustituto etiquetado que la demo local llama
+          <span class="num">--local-resolver</span>.</span></li>
+        <li id="provider-note"></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<script>
+"use strict";
+/* ============================================================================
+   STIGMERGY Field Console
+   A runnable field: the same decision arithmetic as ops/, the same audit
+   construction as audit/, with no database behind it. Zero dependencies,
+   works from file:// (SHA-256 is implemented here because crypto.subtle is
+   unavailable on file:// in some browsers).
+   ============================================================================ */
+
+/* ---------------------------------------------------------------- SHA-256 -- */
+const K256 = new Uint32Array([
+  0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+  0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+  0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+  0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+  0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+  0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+  0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+  0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2]);
+
+function sha256Bytes(bytes){
+  const ml = bytes.length;
+  const withOne = ml + 1;
+  const blocks = Math.ceil((withOne + 8) / 64);
+  const buf = new Uint8Array(blocks * 64);
+  buf.set(bytes);
+  buf[ml] = 0x80;
+  const bitLen = ml * 8;
+  const dv = new DataView(buf.buffer);
+  dv.setUint32(blocks * 64 - 8, Math.floor(bitLen / 0x100000000), false);
+  dv.setUint32(blocks * 64 - 4, bitLen >>> 0, false);
+
+  let h0=0x6a09e667,h1=0xbb67ae85,h2=0x3c6ef372,h3=0xa54ff53a,
+      h4=0x510e527f,h5=0x9b05688c,h6=0x1f83d9ab,h7=0x5be0cd19;
+  const w = new Uint32Array(64);
+
+  for(let b=0;b<blocks;b++){
+    const off = b*64;
+    for(let i=0;i<16;i++) w[i] = dv.getUint32(off + i*4, false);
+    for(let i=16;i<64;i++){
+      const x = w[i-15], y = w[i-2];
+      const s0 = ((x>>>7)|(x<<25)) ^ ((x>>>18)|(x<<14)) ^ (x>>>3);
+      const s1 = ((y>>>17)|(y<<15)) ^ ((y>>>19)|(y<<13)) ^ (y>>>10);
+      w[i] = (w[i-16] + s0 + w[i-7] + s1) >>> 0;
+    }
+    let a=h0,bb=h1,c=h2,d=h3,e=h4,f=h5,g=h6,h=h7;
+    for(let i=0;i<64;i++){
+      const S1 = ((e>>>6)|(e<<26)) ^ ((e>>>11)|(e<<21)) ^ ((e>>>25)|(e<<7));
+      const ch = (e & f) ^ (~e & g);
+      const t1 = (h + S1 + ch + K256[i] + w[i]) >>> 0;
+      const S0 = ((a>>>2)|(a<<30)) ^ ((a>>>13)|(a<<19)) ^ ((a>>>22)|(a<<10));
+      const maj = (a & bb) ^ (a & c) ^ (bb & c);
+      const t2 = (S0 + maj) >>> 0;
+      h=g; g=f; f=e; e=(d + t1)>>>0; d=c; c=bb; bb=a; a=(t1 + t2)>>>0;
+    }
+    h0=(h0+a)>>>0; h1=(h1+bb)>>>0; h2=(h2+c)>>>0; h3=(h3+d)>>>0;
+    h4=(h4+e)>>>0; h5=(h5+f)>>>0; h6=(h6+g)>>>0; h7=(h7+h)>>>0;
+  }
+  const out=[h0,h1,h2,h3,h4,h5,h6,h7];
+  let hex="";
+  for(const v of out) hex += v.toString(16).padStart(8,"0");
+  return hex;
+}
+const ENC = new TextEncoder();
+const sha256 = s => sha256Bytes(ENC.encode(s));
+const short = (h,n=14) => h.slice(0,n) + "…";
+
+/* ------------------------------------------------------- exact rationals -- */
+function bgcd(a,b){ a=a<0n?-a:a; b=b<0n?-b:b; while(b){ const t=a%b; a=b; b=t; } return a; }
+class F {
+  constructor(n,d=1n){
+    n=BigInt(n); d=BigInt(d);
+    if(d===0n) throw new Error("Fraction with zero denominator.");
+    if(d<0n){ n=-n; d=-d; }
+    const g = bgcd(n,d) || 1n;
+    this.n = n/g; this.d = d/g;
+  }
+  add(o){ return new F(this.n*o.d + o.n*this.d, this.d*o.d); }
+  sub(o){ return new F(this.n*o.d - o.n*this.d, this.d*o.d); }
+  mul(o){ return new F(this.n*o.n, this.d*o.d); }
+  div(o){ return new F(this.n*o.d, this.d*o.n); }
+  cmp(o){ const l=this.n*o.d, r=o.n*this.d; return l<r ? -1 : l>r ? 1 : 0; }
+  gte(o){ return this.cmp(o) >= 0; }
+  lte(o){ return this.cmp(o) <= 0; }
+  toNumber(){ return Number(this.n) / Number(this.d); }
+  /* quantize(): the SQL/audit boundary. Scale 10, ROUND_HALF_EVEN, fixed point —
+     never scientific notation. Mirrors audit/canonical.py:quantize + format(d,'f'). */
+  q(scale=10){
+    const S = 10n ** BigInt(scale);
+    let n = this.n * S, d = this.d, neg = false;
+    if(n < 0n){ neg = true; n = -n; }
+    let qt = n / d;
+    const rem = n % d, twice = rem * 2n;
+    if(twice > d || (twice === d && (qt % 2n === 1n))) qt += 1n;
+    const s = qt.toString().padStart(scale+1, "0");
+    const ip = s.slice(0, s.length - scale), fp = s.slice(s.length - scale);
+    return (neg && qt !== 0n ? "-" : "") + ip + "." + fp;
+  }
+}
+const Fr = (n,d=1n) => new F(n,d);
+const F0 = Fr(0n), F1 = Fr(1n);
+const fsum = arr => arr.reduce((a,b)=>a.add(b), F0);
+
+/* ------------------------------------------------------- canonical JSON --- */
+function canonicalJSON(v, path="payload"){
+  if(v === null) return "null";
+  if(typeof v === "boolean") return v ? "true" : "false";
+  if(typeof v === "number"){
+    if(!Number.isInteger(v))
+      throw new TypeError(path + ": float is forbidden in audit payloads.");
+    return String(v);
+  }
+  if(typeof v === "string") return JSON.stringify(v);
+  if(Array.isArray(v)) return "[" + v.map((x,i)=>canonicalJSON(x, path+"["+i+"]")).join(",") + "]";
+  if(typeof v === "object"){
+    const keys = Object.keys(v).sort();
+    return "{" + keys.map(k => JSON.stringify(k)+":"+canonicalJSON(v[k], path+"."+k)).join(",") + "}";
+  }
+  throw new TypeError(path + ": not serializable in an audit payload.");
+}
+
+/* -------------------------------------------------------- the hash chain -- */
+const GENESIS_PREV   = sha256("STIGMERGY_GENESIS");
+const LEDGER_GENESIS = sha256("STIGMERGY_LEDGER_GENESIS");
+
+function formatTs(ms){
+  const d = new Date(ms);
+  const p = (n,w=2)=>String(n).padStart(w,"0");
+  return d.getUTCFullYear()+"-"+p(d.getUTCMonth()+1)+"-"+p(d.getUTCDate())+"T"+
+         p(d.getUTCHours())+":"+p(d.getUTCMinutes())+":"+p(d.getUTCSeconds())+"."+
+         p(d.getUTCMilliseconds(),3)+"000+00:00";
+}
+function entryHash(e){
+  const envelope = canonicalJSON({
+    node_id: e.node_id, seq: e.seq, event_type: e.event_type,
+    reason: e.reason, created_at: e.created_at,
+    payload: JSON.parse(e.payload_json),
+  });
+  return sha256(e.prev_hash + envelope);
+}
+
+/* -------------------------------------------------------------- corpus --- */
+/* The console's own corpus. demo/corpus.py is written for the pinned MiniLM
+   provider and is deliberately hard lexically — under a non-semantic provider
+   run_demo.py refuses to narrate convergence at all, and this page has no way
+   to run MiniLM. So the console seeds a corpus of its own, written so that
+   lexical distance is a TRUTHFUL signal about these three regions: every
+   memory carries several words of its home region's vocabulary, including the
+   six that were filed in the wrong region. The mechanism on display is
+   identical; only the similarity task is made legible enough that the browser
+   provider can honestly answer it. */
+const THEMES = {
+  cooking: [
+    "Low heat and a heavy pan turn onions into sweet jam over forty minutes.",
+    "A ladle of starchy pasta water and cold butter emulsify the sauce in the pan.",
+    "Resting meat after a hard sear lets the heat settle and keeps the juices in the slice.",
+    "Toasting whole spices in a dry pan wakes the oils that carry the flavor.",
+    "Sourdough dough proves fastest near twenty-six degrees; cold slows the rise.",
+    "Deglazing the pan with wine lifts the browned fond into the sauce.",
+    "Salt draws water out of the eggplant so it fries in the pan instead of steaming.",
+    "A hot oven and a wet dough give bread an open crumb and a dark crust.",
+  ],
+  astronomy: [
+    "Betelgeuse is a red supergiant star whose mass will end as a supernova.",
+    "Tidal forces lock the moon so one face never turns away from the planet.",
+    "The Andromeda galaxy will merge with our own galaxy in four billion years.",
+    "A neutron star packs a solar mass into a sphere the width of a city.",
+    "Jupiter is a planet whose great storm is older than the first telescope.",
+    "Redshifted light from distant galaxies is the fingerprint of an expanding sky.",
+    "Europa is an icy moon hiding a deep ocean beneath its frozen shell.",
+    "A pulsar sweeps its beam of light past the telescope like a lighthouse.",
+  ],
+  databases: [
+    "Serializable isolation makes concurrent transactions commit as if they ran in order.",
+    "A write-ahead log turns a crash into a replay instead of a lost commit.",
+    "A B-tree index trades write cost for the logarithmic lookup of a single row.",
+    "MVCC keeps old row versions so a query never blocks a commit.",
+    "Raft keeps every replica agreeing on the same log across failures.",
+    "A covering index answers the query without ever reading the base table.",
+    "A foreign key makes the schema enforce integrity instead of the application.",
+    "A vector index finds approximate neighbours so similarity queries stay cheap.",
+  ],
+};
+const MISPLACED = [
+  ["cooking","astronomy","Browning butter in the pan until the milk solids toast adds depth to a sauce."],
+  ["cooking","databases","Kneading works the dough until the gluten sheet holds, then the oven does the rest."],
+  ["astronomy","cooking","Saturn is a planet whose rings are ice shepherded by small embedded moons."],
+  ["astronomy","databases","The cosmic background is the oldest light in the sky, older than any star."],
+  ["databases","cooking","A changefeed pushes every committed row to consumers instead of making them query."],
+  ["databases","astronomy","A hash join builds a table in memory and probes it with the larger index scan."],
+];
+const QUERIES = {
+  cooking: [
+    "how heat and a heavy pan build flavor",
+    "working the dough for bread and a good crust in the oven",
+    "making a sauce with butter, salt and pan juices",
+  ],
+  astronomy: [
+    "a star, a moon and the mass of a planet",
+    "light from a distant galaxy across the sky",
+    "what the telescope sees of a planet and its moons",
+  ],
+  databases: [
+    "how a transaction and its commit stay correct",
+    "what an index costs for a query on a table",
+    "replicas, the log and the schema of a row",
+  ],
+};
+const THEME_LIST = ["cooking","astronomy","databases"];
+const regionIdFor = t => "region-" + t;
+const themeOfRegion = r => r.slice("region-".length);
+
+/* ------------------------------------------------------------ provider --- */
+/* MINILM_VECTORS is injected by tools/bake_embeddings.py when the pinned
+   sentence-transformers model is available: base64 int8 quantizations of the
+   real all-MiniLM-L6-v2 384-dim embeddings, keyed by content sha256 prefix.
+   When absent the console falls back to a labeled lexical provider and says so
+   in plain sight — the same discipline demo/run_demo.py applies to
+   RecallResult.is_semantic. */
+const MINILM_VECTORS = window.MINILM_VECTORS || null;
+
+const STOPWORDS = new Set(("a an the and or but of to in on at by for with from into "+
+  "is are was were be been being it its this that these those as than then when what "+
+  "how do does did i we you they them their there here so if not no more most can will "+
+  "would has have had about after before over under out up down between across like "+
+  "one two through without within around each other some any").split(" "));
+
+function tokens(text){
+  return text.toLowerCase().replace(/[^a-z\s]/g," ").split(/\s+/)
+    .filter(w => w.length > 2 && !STOPWORDS.has(w))
+    .map(stem);
+}
+function stem(w){
+  if(w.length > 4 && w.endsWith("ies")) return w.slice(0,-3)+"y";
+  if(w.length > 4 && w.endsWith("sses")) return w.slice(0,-2);
+  if(w.length > 3 && w.endsWith("s") && !w.endsWith("ss") && !w.endsWith("us")) w = w.slice(0,-1);
+  if(w.length > 5 && w.endsWith("ing")) w = w.slice(0,-3);
+  if(w.length > 4 && w.endsWith("ed")) w = w.slice(0,-2);
+  if(w.length > 5 && w.endsWith("ly")) w = w.slice(0,-2);
+  return w;
+}
+function b64ToInt8(b64){
+  const bin = atob(b64);
+  const out = new Float32Array(bin.length);
+  for(let i=0;i<bin.length;i++){
+    let v = bin.charCodeAt(i);
+    if(v > 127) v -= 256;
+    out[i] = v / 127;
+  }
+  return out;
+}
+
+const Provider = (() => {
+  if(MINILM_VECTORS){
+    const cache = new Map();
+    for(const k in MINILM_VECTORS) cache.set(k, normalize(b64ToInt8(MINILM_VECTORS[k])));
+    return {
+      id: MINILM_VECTORS.__provider || "all-MiniLM-L6-v2 (precomputed)",
+      semantic: true,
+      basis: "minilm",
+      embed(text){
+        const v = cache.get(sha256(text).slice(0,16));
+        if(v) return v;
+        return null;
+      },
+    };
+  }
+  /* lexical fallback: tf-idf over the seeded corpus, cosine distance. */
+  const idf = new Map(); let docs = [];
+  return {
+    id: "browser-lexical-tfidf-v1",
+    semantic: true,
+    basis: "lexical",
+    fit(texts){
+      docs = texts.map(tokens);
+      const df = new Map();
+      for(const d of docs){ for(const w of new Set(d)) df.set(w, (df.get(w)||0)+1); }
+      idf.clear();
+      for(const [w,c] of df) idf.set(w, Math.log((docs.length + 1) / (c + 1)) + 1);
+    },
+    embed(text){
+      const tf = new Map();
+      for(const w of tokens(text)) tf.set(w, (tf.get(w)||0)+1);
+      const vec = new Map();
+      for(const [w,c] of tf){ const i = idf.get(w); if(i) vec.set(w, c*i); }
+      return normalizeSparse(vec);
+    },
+  };
+})();
+function normalize(v){
+  let n = 0; for(let i=0;i<v.length;i++) n += v[i]*v[i];
+  n = Math.sqrt(n) || 1;
+  const out = new Float32Array(v.length);
+  for(let i=0;i<v.length;i++) out[i] = v[i]/n;
+  return out;
+}
+function normalizeSparse(m){
+  let n = 0; for(const v of m.values()) n += v*v;
+  n = Math.sqrt(n) || 1;
+  const out = new Map();
+  for(const [k,v] of m) out.set(k, v/n);
+  return out;
+}
+/* cosine distance, the same orientation the SQL vector index uses: smaller is nearer. */
+function distance(a,b){
+  if(!a || !b) return 1;
+  let dot = 0;
+  if(a instanceof Float32Array){
+    for(let i=0;i<a.length;i++) dot += a[i]*b[i];
+  } else {
+    const [s,l] = a.size < b.size ? [a,b] : [b,a];
+    for(const [k,v] of s){ const w = l.get(k); if(w) dot += v*w; }
+  }
+  return 1 - dot;
+}
+
+/* --------------------------------------------------- engine constants ----- */
+const REINFORCEMENT_ALPHA = Fr(1n,5n);      // ops/memories.py
+const DEFAULT_CONFIDENCE  = Fr(1n,2n);
+const BETA                = Fr(1n,4n);      // ops/controller.py
+const ENTER               = Fr(3n,5n);
+const EXIT                = Fr(2n,5n);
+const MIN_IMPROVEMENT     = Fr(1n,100n);
+const STAGNATION_LIMIT    = 5;
+const CONSENSUS_QUORUM    = Fr(1n,2n);      // ops/recruitment.py
+const DECAY_RATE          = Fr(15n,100n);
+const SIGNAL_STRENGTH     = F1;
+const LIVENESS_FLOOR      = 0.05;           // float, and only ever a filter
+const SIGNAL_TTL_MS       = 45000;
+const COOLDOWN_MS         = 8000;           // demo compression of DEFAULT_COOLDOWN (5 min)
+const RECALL_LIMIT        = 5;
+
+/* --------------------------------------------------------------- state --- */
+let memories, regions, agents, signals, chains, snapshots, tick, sealed, running, timer;
+let MODE = "simulation", REGION_IDS = [], loadedBundle = null, bundleChecks = null;
+let selected = null, tampered = null, verifyState = null;
+
+/* Workload only — which query an agent asks next. Never a decision. */
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+let rng = mulberry32(20260713);
+
+function appendEvent(node_id, event_type, reason, payload, whenMs){
+  const chain = chains[node_id] || (chains[node_id] = []);
+  const seq = chain.length;
+  const prev = seq === 0 ? GENESIS_PREV : chain[seq-1].entry_hash;
+  const payload_json = canonicalJSON(payload);
+  const e = { node_id, seq, prev_hash: prev, event_type, reason,
+              created_at: formatTs(whenMs), payload_json, fresh: true };
+  e.entry_hash = entryHash(e);
+  chain.push(e);
+  sealed++;
+  return e;
+}
+
+function seed(){
+  memories = []; regions = {}; signals = []; chains = {}; snapshots = [];
+  tick = 0; sealed = 0; selected = null; tampered = null; verifyState = null;
+  rng = mulberry32(20260713);
+  const t0 = Date.now();
+
+  MODE = "simulation"; loadedBundle = null; bundleChecks = null;
+  REGION_IDS = THEME_LIST.map(regionIdFor);
+  for(const th of THEME_LIST){
+    const rid = regionIdFor(th);
+    regions[rid] = { id: rid, theme: th, members: [] };
+    appendEvent("demo-seeder","REGION_CREATED","demo corpus region",
+      { region_id: rid, locality: "demo" }, t0);
+  }
+
+  const items = [];
+  for(const th of THEME_LIST) for(const text of THEMES[th]) items.push([regionIdFor(th), text, th]);
+  for(const [home, into, text] of MISPLACED) items.push([regionIdFor(into), text, home]);
+
+  if(Provider.fit) Provider.fit(items.map(i => i[1]));
+
+  items.forEach(([rid, content, homeTheme], i) => {
+    const m = {
+      id: "mem-" + String(i+1).padStart(2,"0"),
+      content, region: rid, homeTheme,
+      misplaced: themeOfRegion(rid) !== homeTheme,
+      tier: "SHORT_TERM", state: "NEUTRAL",
+      confidence: DEFAULT_CONFIDENCE,
+      emb: Provider.embed(content),
+      lastMigratedAt: null,
+      x: 0, y: 0, tx: 0, ty: 0, born: i,
+    };
+    memories.push(m);
+    regions[rid].members.push(m.id);
+    appendEvent("demo-seeder","MEMORY_STORED","demo corpus seed", {
+      memory_id: m.id, region_id: rid,
+      confidence: m.confidence.q(),
+      content_sha256: sha256(content),
+      provider_id: Provider.id,
+    }, t0);
+  });
+
+  agents = [0,1,2].map(i => ({
+    agent_id: "agent-" + i, node_id: "demo-agent-" + i,
+    mode: "ROAMING", ema: F0, ema_prev: F0, stagnation: 0, region: null,
+    x: 0.5, y: 0.5, tx: 0.5, ty: 0.5,
+  }));
+
+  layoutAll(true);
+  renderAll();
+}
+
+/* --------------------------------------------------------------- recall -- */
+function recall(queryText, regionId){
+  const q = Provider.embed(queryText);
+  const pool = regionId ? memories.filter(m => m.region === regionId) : memories;
+  return pool
+    .map(m => ({ m, d: distance(q, m.emb) }))
+    .sort((a,b) => a.d - b.d || (a.m.born - b.m.born))
+    .slice(0, RECALL_LIMIT);
+}
+
+/* resonance_density: the fraction of achievable confidence that is REINFORCED.
+   NEUTRAL hits contribute zero but count in the denominator. ops/controller.py */
+function resonanceDensity(hits){
+  if(!hits.length) return F0;
+  let total = F0;
+  for(const h of hits) if(h.m.state === "REINFORCED") total = total.add(h.m.confidence);
+  return total.div(Fr(BigInt(hits.length)));
+}
+
+/* step(): one EMA update, one hysteresis evaluation, pure Fraction. */
+function step(state, observation){
+  const newEma = BETA.mul(observation).add(F1.sub(BETA).mul(state.ema));
+  let stagnation = 0;
+  if(state.mode === "DWELLING"){
+    const improved = newEma.gte(state.ema.add(MIN_IMPROVEMENT));
+    stagnation = improved ? 0 : state.stagnation + 1;
+  }
+  let mode = state.mode, trigger = null;
+  if(state.mode === "ROAMING" && newEma.gte(ENTER)){
+    mode = "DWELLING"; trigger = "ema_reached_enter_threshold";
+  } else if(state.mode === "DWELLING" && newEma.lte(EXIT)){
+    mode = "ROAMING"; trigger = "ema_fell_to_exit_threshold";
+  } else if(state.mode === "DWELLING" && stagnation >= STAGNATION_LIMIT){
+    mode = "ROAMING"; trigger = "stagnation";
+  }
+  const transitioned = mode !== state.mode;
+  if(transitioned) stagnation = 0;
+  return { mode, ema: newEma, ema_prev: state.ema, stagnation, transitioned, trigger };
+}
+
+function majorityRegion(hits){
+  const count = {};
+  for(const h of hits) count[h.m.region] = (count[h.m.region]||0) + 1;
+  return Object.keys(count).sort((a,b) => count[b]-count[a] || a.localeCompare(b))[0];
+}
+
+/* ---------------------------------------------------------- agent round -- */
+function agentRound(agent){
+  const now = Date.now();
+  const scope = agent.mode === "DWELLING" ? agent.region : null;
+
+  /* WORKLOAD, never a decision (the run_demo.py note applies here too): what an
+     agent asks next. Half the rounds are a themed question; half are associative
+     — "more like this one" seeded from a memory the field already holds. The
+     associative half is what lets the density gradient speak: a memory asked
+     about itself answers with its resonant neighbourhood, and if that
+     neighbourhood lives somewhere else, the agent has just observed a memory
+     sitting away from home without anyone telling it so. */
+  let query, theme, how;
+  if(rng() < 0.5){
+    const pool = scope ? memories.filter(m => m.region === scope) : memories;
+    const seedMem = pool[Math.floor(rng()*pool.length)];
+    query = seedMem.content; theme = seedMem.homeTheme;
+    how = "associative recall seeded by " + seedMem.id;
+  } else {
+    theme = THEME_LIST[Math.floor(rng()*THEME_LIST.length)];
+    const qlist = QUERIES[theme];
+    query = qlist[Math.floor(rng()*qlist.length)];
+    how = "top recall hit for a " + theme + " query";
+  }
+
+  const hits = recall(query, scope);
+  if(!hits.length){
+    const d = step(agent, F0);
+    Object.assign(agent, { mode: d.mode, ema: d.ema, ema_prev: d.ema_prev, stagnation: d.stagnation });
+    return;
+  }
+
+  const density = resonanceDensity(hits);
+  const majority = majorityRegion(hits);
+  const d = step(agent, density);
+  const wasMode = agent.mode;
+  Object.assign(agent, { mode: d.mode, ema: d.ema, ema_prev: d.ema_prev, stagnation: d.stagnation });
+  if(d.transitioned){
+    agent.region = d.mode === "DWELLING" ? majority : null;
+    appendEvent(agent.node_id, "AGENT_MODE_CHANGED", d.trigger, {
+      agent_id: agent.agent_id, old_mode: wasMode, new_mode: d.mode,
+      region: agent.region, observation: density.q(),
+      ema: d.ema.q(), ema_prev: d.ema_prev.q(),
+      stagnation_count: d.stagnation, trigger: d.trigger,
+    }, now);
+  }
+
+  /* reinforce the top hit — c' = c + (1 − c)·α, exact */
+  const top = hits[0].m;
+  const oldConf = top.confidence, oldState = top.state;
+  top.confidence = oldConf.add(F1.sub(oldConf).mul(REINFORCEMENT_ALPHA));
+  top.state = "REINFORCED";
+  appendEvent(agent.node_id, "MEMORY_REINFORCED", how, {
+    memory_id: top.id, old_confidence: oldConf.q(), new_confidence: top.confidence.q(),
+    old_state: oldState, new_state: "REINFORCED",
+    alpha: REINFORCEMENT_ALPHA.n + "/" + REINFORCEMENT_ALPHA.d,
+  }, now);
+
+  /* the density gradient, not the agent, says the memory sits away from home */
+  if(top.region !== majority){
+    const sig = {
+      id: "sig-" + String(signals.length+1).padStart(3,"0"),
+      memory_id: top.id, origin_region: majority,
+      vigor: density, strength: SIGNAL_STRENGTH, rate: DECAY_RATE,
+      created_at: now, expires_at: now + SIGNAL_TTL_MS, status: "PENDING",
+    };
+    signals.push(sig);
+    appendEvent(agent.node_id, "SIGNAL_EMITTED", "HIGH_RESONANCE", {
+      signal_id: sig.id, memory_id: top.id, origin_region: majority,
+      vigor: density.q(), signal_strength: SIGNAL_STRENGTH.q(), decay_rate: DECAY_RATE.q(),
+    }, now);
+  }
+}
+
+/* ------------------------------------------------------------- resolver -- */
+/* DEMO-ONLY stand-in for the changefeed Lambda: it polls, the real system reacts. */
+function decayedStrength(sig, now){
+  const elapsed = (now - sig.created_at) / 1000;
+  return sig.strength.toNumber() * Math.exp(-sig.rate.toNumber() * elapsed);
+}
+function liveSignals(memoryId, now){
+  return signals.filter(s =>
+    s.memory_id === memoryId && s.status === "PENDING" && s.expires_at > now &&
+    decayedStrength(s, now) >= LIVENESS_FLOOR);
+}
+function resolveAll(){
+  const now = Date.now();
+  for(const s of signals){
+    if(s.status === "PENDING" && (s.expires_at <= now || decayedStrength(s, now) < LIVENESS_FLOOR))
+      s.status = "EXPIRED";
+  }
+  const pending = [...new Set(signals.filter(s => s.status === "PENDING").map(s => s.memory_id))];
+  for(const mid of pending){
+    const live = liveSignals(mid, now);
+    if(!live.length) continue;
+    const byRegion = {};
+    for(const s of live) byRegion[s.origin_region] = (byRegion[s.origin_region] || F0).add(s.vigor);
+    const target = Object.keys(byRegion)
+      .sort((a,b) => byRegion[b].cmp(byRegion[a]) || a.localeCompare(b))[0];
+
+    const votes = live.filter(s => s.origin_region === target);
+    const vigorFor = fsum(votes.map(s => s.vigor));
+    const vigorMax = Fr(BigInt(live.length));
+    /* THE verdict: vigor_for ≥ quorum · live_signals, exact rationals only. */
+    const reached = vigorFor.gte(CONSENSUS_QUORUM.mul(vigorMax));
+    if(!reached) continue;                       // preserve uncertainty, no event
+
+    const m = memories.find(x => x.id === mid);
+    if(!m || m.region === target){ votes.forEach(s => s.status = "RESOLVED"); continue; }
+    /* Invariant 6: cooldown is a where-clause, not an if — the migration simply
+       does not match, and the signals stay pending for the next tick. */
+    if(m.lastMigratedAt !== null && now - m.lastMigratedAt < COOLDOWN_MS) continue;
+
+    const from = m.region, oldTier = m.tier;
+    regions[from].members = regions[from].members.filter(x => x !== mid);
+    regions[target].members.push(mid);
+    m.region = target;
+    m.tier = "REGIONAL";
+    m.lastMigratedAt = now;
+    votes.forEach(s => s.status = "RESOLVED");
+    appendEvent("demo-local-resolver", "MEMORY_MIGRATED",
+      "weighted recruitment consensus reached (quorum " +
+      CONSENSUS_QUORUM.n + "/" + CONSENSUS_QUORUM.d + ")", {
+      memory_id: mid, from_region: from, target_region: target,
+      old_tier: oldTier, new_tier: "REGIONAL",
+      live_signals: live.length, votes_for: votes.length,
+      vigor_for: vigorFor.q(), vigor_max: vigorMax.q(),
+      quorum: CONSENSUS_QUORUM.n + "/" + CONSENSUS_QUORUM.d,
+      accepted_signal_ids: votes.map(v => v.id).sort(),
+    }, now);
+    layoutAll(false);
+  }
+}
+
+/* ---------------------------------------------------------------- loop --- */
+/* One round = every agent takes its turn, the way run_demo.py runs one thread
+   per agent. They share no channel; the only thing passing between them is the
+   state each one leaves behind. */
+function oneRound(){
+  if(MODE === "bundle") return;   // a bundle is evidence, not a running field
+  for(const a of agents) agentRound(a);
+  tick++;
+  resolveAll();   /* the changefeed resolver reacts to every write; only its polling is a demo artifact */
+  renderAll();
+}
+function setRunning(on){
+  running = on;
+  clearInterval(timer);
+  if(on) timer = setInterval(oneRound, 320);
+  const b = document.getElementById("btn-run");
+  b.querySelector(".en").textContent = on ? "Pause" : "Run the field";
+  b.querySelector(".es").textContent = on ? "Pausar" : "Ejecutar el campo";
+}
+
+/* =========================================================== the canvas === */
+const cv = document.getElementById("field"), ctx = cv.getContext("2d");
+let W=0, H=0, DPR=1;
+function resize(){
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  const r = cv.getBoundingClientRect();
+  W = r.width; H = r.height;
+  cv.width = W*DPR; cv.height = H*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  layoutAll(true);
+}
+const PALETTE = ["#A8481F","#38477E","#2C6A57","#7A5230","#6B3A6B","#2F5F7A","#8A5A2B","#3E6B4A"];
+const THEME_COLOR = { cooking:PALETTE[0], astronomy:PALETTE[1], databases:PALETTE[2] };
+const regionColor = rid => PALETTE[Math.max(0, REGION_IDS.indexOf(rid)) % PALETTE.length];
+/* In a simulation a memory is inked with the region it BELONGS to, so a
+   misplaced one reads as a foreign colour. A bundle carries no such ground
+   truth — nobody labelled its memories — so there it is inked by where it
+   actually lives, and the page claims nothing more than that. */
+const colorOf = m => MODE === "bundle" ? regionColor(m.region) : THEME_COLOR[m.homeTheme];
+
+function basinOf(rid){
+  const i = Math.max(0, REGION_IDS.indexOf(rid));
+  const n = Math.max(1, REGION_IDS.length);
+  const cols = Math.min(n, 3), rows = Math.ceil(n/cols);
+  const col = i % cols, row = Math.floor(i/cols);
+  const narrow = W < 620;
+  const padTop = 42, padBottom = narrow ? 38 : 48;   // legend above, region labels below
+  const avail = Math.max(140, H - padTop - padBottom);
+  const cw = W/cols, ch = avail/rows;
+  const r = Math.min(cw/(narrow ? 2.05 : 2.25), ch/2.35);
+  const drift = (rows === 1 && i === 1) ? -avail*0.06 : 0;   // break a flat row
+  return { x: cw*(col + 0.5), y: padTop + ch*(row + 0.5) + drift, r };
+}
+function layoutAll(snap){
+  if(!memories) return;
+  for(const rid in regions){
+    const b = basinOf(rid), ms = regions[rid].members;
+    ms.forEach((mid, i) => {
+      const m = memories.find(x => x.id === mid);
+      const GA = 2.39996, a = i*GA;
+      const rr = b.r * 0.64 * Math.sqrt((i+1)/Math.max(6, ms.length));
+      m.tx = b.x + rr*Math.cos(a)*1.14;
+      m.ty = b.y + rr*Math.sin(a)*1.02;
+      if(snap || (m.x===0 && m.y===0)){ m.x = m.tx; m.y = m.ty; }
+    });
+  }
+  if(agents) agents.forEach((a,i) => {
+    if(a.region){ const b = basinOf(a.region);
+      a.tx = b.x + Math.cos(i*2.1)*b.r*0.86; a.ty = b.y + Math.sin(i*2.1)*b.r*0.86; }
+    else { a.tx = W*0.5 + Math.cos(i*2.1 + tick*0.08)*W*0.14;
+           a.ty = H*0.52 + Math.sin(i*2.1 + tick*0.08)*H*0.13; }
+    if(snap){ a.x = a.tx; a.y = a.ty; }
+  });
+}
+function drawField(now){
+  if(!memories){ requestAnimationFrame(drawField); return; }
+  ctx.clearRect(0,0,W,H);
+
+  for(const rid in regions){
+    const b = basinOf(rid), th = themeOfRegion(rid);
+    const g = ctx.createRadialGradient(b.x,b.y,b.r*0.15,b.x,b.y,b.r);
+    g.addColorStop(0,"rgba(198,187,161,.55)");
+    g.addColorStop(1,"rgba(198,187,161,0)");
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,6.283); ctx.fill();
+    ctx.strokeStyle="rgba(59,52,42,.16)"; ctx.lineWidth=1;
+    ctx.setLineDash([2,5]); ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,6.283); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font="600 10px ui-monospace,monospace"; ctx.textAlign="center";
+    ctx.fillStyle="rgba(59,52,42,.62)";
+    ctx.fillText(("region-"+th).toUpperCase(), b.x, b.y + b.r + 15);
+    const n = regions[rid].members.length;
+    ctx.fillStyle="rgba(59,52,42,.38)";
+    ctx.fillText(n + (n===1?" memory":" memories"), b.x, b.y + b.r + 28);
+  }
+
+  /* live signals: dashed pheromone lines, opacity = decayed strength */
+  const t = Date.now();
+  for(const s of (MODE === "bundle" ? [] : signals)){
+    if(s.status !== "PENDING") continue;
+    const d = decayedStrength(s, t);
+    if(d < LIVENESS_FLOOR) continue;
+    const m = memories.find(x => x.id === s.memory_id);
+    if(!m) continue;
+    const b = basinOf(s.origin_region);
+    ctx.strokeStyle = "rgba(59,52,42," + (0.14 + 0.34*d) + ")";
+    ctx.lineWidth = 0.7 + 1.5*s.vigor.toNumber();
+    ctx.setLineDash([3,5]); ctx.lineDashOffset = -(now/60) % 8;
+    ctx.beginPath(); ctx.moveTo(m.x, m.y);
+    const mx = (m.x+b.x)/2, my = (m.y+b.y)/2 - 26;
+    ctx.quadraticCurveTo(mx, my, b.x, b.y); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  for(const m of memories){
+    m.x += (m.tx - m.x) * 0.09;
+    m.y += (m.ty - m.y) * 0.09;
+    const col = colorOf(m);
+    const home = MODE === "bundle" || themeOfRegion(m.region) === m.homeTheme;
+    const r = 3.4 + 2.6*(m.confidence.toNumber() - 0.5);
+    if(m.state === "REINFORCED"){
+      const g = ctx.createRadialGradient(m.x,m.y,0,m.x,m.y,r*4.2);
+      g.addColorStop(0, col + "3A"); g.addColorStop(1, col + "00");
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(m.x,m.y,r*4.2,0,6.283); ctx.fill();
+      ctx.fillStyle=col; ctx.beginPath(); ctx.arc(m.x,m.y,r,0,6.283); ctx.fill();
+    } else {
+      ctx.strokeStyle=col; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.arc(m.x,m.y,r,0,6.283); ctx.stroke();
+    }
+    if(!home){
+      ctx.strokeStyle = col + "88"; ctx.lineWidth=1;
+      ctx.setLineDash([2,3]);
+      ctx.beginPath(); ctx.arc(m.x,m.y,r+5.5,0,6.283); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  if(MODE !== "bundle") agents.forEach(a => {
+    a.x += (a.tx - a.x) * 0.07;
+    a.y += (a.ty - a.y) * 0.07;
+    ctx.save(); ctx.translate(a.x, a.y);
+    ctx.fillStyle = a.mode === "DWELLING" ? "rgba(59,52,42,.9)" : "rgba(59,52,42,.42)";
+    ctx.beginPath(); ctx.moveTo(0,-6); ctx.lineTo(5,5); ctx.lineTo(-5,5); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.font="9px ui-monospace,monospace"; ctx.textAlign="center";
+    ctx.fillStyle="rgba(59,52,42,.55)";
+    ctx.fillText(a.agent_id, a.x, a.y + 18);
+  });
+
+  requestAnimationFrame(drawField);
+}
+
+/* ============================================================ rendering === */
+const $ = id => document.getElementById(id);
+function renderAll(){ renderAgents(); renderSignals(); renderScore(); renderNodes();
+  renderReadouts(); renderBundleChecks(); }
+function renderReadouts(){
+  $("read-tick").textContent = MODE === "bundle" ? "—" : tick;
+  $("read-events").textContent = sealed;
+}
+
+function renderAgents(){
+  if(MODE === "bundle"){
+    $("agents").innerHTML = agents.map(a => `<div class="agent">
+      <div class="top"><span class="nm">${a.node_id}</span>
+        <span class="mode ${a.mode==="DWELLING"?"dwell":""}">${String(a.mode).toLowerCase()}</span></div>
+      <div class="meta">${a.entries} sealed ${a.entries===1?"entry":"entries"}${
+        a.mode !== "—" ? " · ema " + a.ema.q(4) : ""}${a.region ? " · "+a.region : ""}</div>
+    </div>`).join("");
+    return;
+  }
+  $("agents").innerHTML = agents.map(a => {
+    const pct = Math.round(a.ema.toNumber()*100);
+    return `<div class="agent">
+      <div class="top">
+        <span class="nm">${a.agent_id}</span>
+        <span class="mode ${a.mode==="DWELLING"?"dwell":""}">${a.mode.toLowerCase()}</span>
+      </div>
+      <div class="meta">ema ${a.ema.q(4)} · ${a.region ? a.region : "—"}${
+        a.stagnation ? " · stagnation "+a.stagnation+"/"+STAGNATION_LIMIT : ""}</div>
+      <div class="emabar"><i style="width:${pct}%"></i>
+        <u style="left:40%" title="exit 2/5"></u><u style="left:60%" title="enter 3/5"></u></div>
+    </div>`;
+  }).join("");
+}
+function renderSignals(){
+  if(MODE === "bundle"){
+    $("sig-count").textContent = signals.length;
+    $("signals").innerHTML = signals.length ? signals.slice(0,6).map(s => `<div class="sig">
+      <div class="l1"><span>${s.memory_id.slice(0,8)}… → ${s.origin_region}</span>
+        <span>${s.vigor.q(4)}</span></div>
+      <div class="l2">status ${s.status} · decay ${s.rate.q(4)} — recorded, not live</div>
+    </div>`).join("")
+      : `<div class="empty"><span class="en">this bundle recorded no signals</span>` +
+        `<span class="es">este bundle no registró señales</span></div>`;
+    return;
+  }
+  const now = Date.now();
+  const live = signals.filter(s => s.status==="PENDING" && s.expires_at>now &&
+    decayedStrength(s,now) >= LIVENESS_FLOOR);
+  $("sig-count").textContent = live.length;
+  if(!live.length){
+    $("signals").innerHTML = `<div class="empty"><span class="en">no live signal — the field is quiet</span>` +
+      `<span class="es">sin señal viva — el campo está quieto</span></div>`;
+    return;
+  }
+  $("signals").innerHTML = live.slice(-4).reverse().map(s => {
+    const d = decayedStrength(s,now);
+    const need = CONSENSUS_QUORUM.mul(Fr(BigInt(liveSignals(s.memory_id,now).length)));
+    const have = fsum(liveSignals(s.memory_id,now)
+      .filter(x => x.origin_region===s.origin_region).map(x => x.vigor));
+    return `<div class="sig">
+      <div class="l1"><span>${s.memory_id} → ${themeOfRegion(s.origin_region)}</span>
+        <span>${s.vigor.q(4)}</span></div>
+      <div class="l2">strength ${d.toFixed(4)} · vigor_for ${have.q(4)} / need ${need.q(4)}</div>
+      <div class="vig"><i style="width:${Math.min(100, 100*d)}%"></i></div>
+    </div>`;
+  }).join("");
+}
+function renderScore(){
+  if(MODE === "bundle"){
+    const byRegion = {};
+    for(const m of memories) byRegion[m.region] = (byRegion[m.region]||0)+1;
+    const reinforced = memories.filter(m => m.state === "REINFORCED").length;
+    $("scorebody").innerHTML = `
+      <div class="score"><b>${memories.length}</b><span class="of">
+        <span class="en">memories</span><span class="es">memorias</span></span></div>
+      <div class="mislist">${Object.keys(byRegion).sort().map(r => `<div class="mis">
+        <span class="dot" style="background:${regionColor(r)}"></span>
+        <span>${r}</span><span class="where">${byRegion[r]}</span></div>`).join("")}</div>
+      <div class="aside">${reinforced} <span class="en">reinforced · source</span>
+        <span class="es">reforzadas · origen</span> ${escapeHtml(bundleSource)}</div>`;
+    return;
+  }
+  const mis = memories.filter(m => m.misplaced);
+  const home = mis.filter(m => themeOfRegion(m.region) === m.homeTheme);
+  $("score-n").textContent = home.length;
+  /* The gradient decides, not the seed label — so the field sometimes recruits a
+     memory the corpus never marked as misplaced. Report it rather than hide it. */
+  const moved = (chains["demo-local-resolver"] || []).length;
+  const unlabelled = moved - mis.filter(m => m.lastMigratedAt !== null).length;
+  $("churn").innerHTML = !moved ? "" : (unlabelled > 0
+    ? `<span class="en">${moved} migration${moved===1?"":"s"} so far, ${unlabelled} of them a memory the
+        corpus never marked as misplaced — the neighbourhood decides, not the label.</span>
+       <span class="es">${moved} migraci${moved===1?"ón":"ones"} hasta ahora, ${unlabelled} de ellas una
+        memoria que el corpus nunca marcó — decide el vecindario, no la etiqueta.</span>`
+    : `<span class="en">${moved} migration${moved===1?"":"s"} so far, every one of them a memory the corpus
+        did mark.</span>
+       <span class="es">${moved} migraci${moved===1?"ón":"ones"} hasta ahora, todas de memorias que el
+        corpus sí había marcado.</span>`);
+  $("mislist").innerHTML = mis.map(m => {
+    const atHome = themeOfRegion(m.region) === m.homeTheme;
+    return `<div class="mis ${atHome?"home":""}">
+      <span class="dot" style="background:${colorOf(m)}"></span>
+      <span>${m.id}</span>
+      <span class="where">${atHome ? "→ "+m.homeTheme : themeOfRegion(m.region)+" · home "+m.homeTheme}</span>
+    </div>`;
+  }).join("");
+}
+
+function renderNodes(){
+  const order = Object.keys(chains).sort();
+  $("nodes").innerHTML = order.map(nid => {
+    const chain = chains[nid];
+    const v = verifyState && verifyState.nodes[nid];
+    const verdict = !v ? `<span class="verdict idle">not verified</span>`
+      : v.ok ? `<span class="verdict ok">chain intact · ${chain.length}</span>`
+             : `<span class="verdict bad">broken at seq ${v.brokenAt}</span>`;
+    const rows = chain.slice(-40).map(e => {
+      const broken = v && !v.ok && e.seq >= v.brokenAt;
+      return `<div class="entry${selected && selected.node_id===nid && selected.seq===e.seq ? " sel":""}${
+        broken ? " broken":""}${tampered && tampered.node_id===nid && tampered.seq===e.seq ? " tampered":""}${
+        e.fresh ? " fresh":""}" data-node="${nid}" data-seq="${e.seq}" tabindex="0" role="button">
+        <span class="sq">${e.seq}</span>
+        <span class="ev">${e.event_type}</span>
+        <span class="hs">${short(e.entry_hash,10)}</span>
+      </div>`;
+    }).join("");
+    return `<div class="nodecard">
+      <header><span class="nid">${nid}</span>${verdict}</header>
+      <div class="entries">${rows}</div>
+    </div>`;
+  }).join("");
+  Object.values(chains).forEach(ch => ch.forEach(e => e.fresh = false));
+  $("nodes").querySelectorAll(".entry").forEach(el => {
+    const pick = () => selectEntry(el.dataset.node, +el.dataset.seq);
+    el.addEventListener("click", pick);
+    el.addEventListener("keydown", ev => { if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); pick(); }});
+  });
+  renderDetail();
+}
+
+function selectEntry(nid, seq){
+  selected = chains[nid][seq];
+  renderNodes();
+}
+function renderDetail(){
+  const d = $("detail");
+  if(!selected){
+    d.innerHTML = `<div class="recipe"><span class="en">Pick any entry to see the exact bytes that were
+      hashed, and the recipe that produced its hash.</span><span class="es">Elegí cualquier entrada para ver
+      los bytes exactos que se hashearon, y la receta que produjo su hash.</span></div>`;
+    $("detail-node").textContent = "—";
+    return;
+  }
+  const e = selected;
+  $("detail-node").textContent = e.node_id + " · seq " + e.seq;
+  const recomputed = entryHash(e);
+  const intact = recomputed === e.entry_hash;
+  d.innerHTML = `
+    <dl class="kv">
+      <dt>event</dt><dd>${e.event_type}</dd>
+      <dt>reason</dt><dd>${e.reason}</dd>
+      <dt>created at</dt><dd>${e.created_at}</dd>
+      <dt>prev hash</dt><dd class="gold">${e.prev_hash}</dd>
+      <dt>entry hash</dt><dd class="gold">${e.entry_hash}</dd>
+      <dt>recomputed</dt><dd style="color:${intact?"var(--pass)":"var(--breach)"}">${recomputed}</dd>
+    </dl>
+    <pre class="payload">${escapeHtml(pretty(e.payload_json))}</pre>
+    <div class="recipe">
+      <b>entry_hash</b> = sha256( prev_hash ‖ canonical_json({node_id, seq, event_type, reason,
+      created_at, payload}) )<br>
+      <b>canonical_json</b>: keys sorted, no whitespace, decimals as fixed-point strings at scale 10.
+    </div>
+    <div class="forge">
+      <label><span class="en">Rewrite one value in this payload, then verify again</span>
+        <span class="es">Reescribí un valor de este payload y volvé a verificar</span></label>
+      <input id="forge-input" value="${escapeHtml(e.payload_json)}" spellcheck="false">
+    </div>`;
+}
+function pretty(json){
+  try { return JSON.stringify(JSON.parse(json), null, 2); } catch(_) { return json; }
+}
+function escapeHtml(s){
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ------------------------------------------------------------- verifying -- */
+function verifyChain(nid){
+  const chain = chains[nid];
+  let expectedPrev = GENESIS_PREV;
+  for(let i=0;i<chain.length;i++){
+    const e = chain[i];
+    if(e.seq !== i) return { ok:false, brokenAt:i, why:"sequence gap" };
+    if(e.prev_hash !== expectedPrev) return { ok:false, brokenAt:i, why:"linkage break" };
+    let recomputed;
+    try { recomputed = entryHash(e); }
+    catch(_) { return { ok:false, brokenAt:i, why:"payload is not canonical JSON" }; }
+    if(recomputed !== e.entry_hash)
+      return { ok:false, brokenAt:i, why:"entry hash does not reproduce from its payload",
+               expected:e.entry_hash, actual:recomputed };
+    expectedPrev = e.entry_hash;
+  }
+  return { ok:true, brokenAt:null };
+}
+function merkleRoot(heads){
+  const ids = Object.keys(heads).sort();
+  let level = ids.map(id => sha256(id + ":" + heads[id]));
+  while(level.length > 1){
+    const next = [];
+    for(let i=0;i+1<level.length;i+=2) next.push(sha256(level[i] + level[i+1]));
+    if(level.length % 2 === 1) next.push(level[level.length-1]);
+    level = next;
+  }
+  return level[0];
+}
+function currentHeads(){
+  const heads = {};
+  for(const nid of Object.keys(chains).sort()){
+    const ch = chains[nid];
+    if(ch.length) heads[nid] = ch[ch.length-1].entry_hash;
+  }
+  return heads;
+}
+function doVerify(){
+  const nodes = {};
+  let broken = [];
+  for(const nid of Object.keys(chains).sort()){
+    nodes[nid] = verifyChain(nid);
+    if(!nodes[nid].ok) broken.push({ nid, ...nodes[nid] });
+  }
+  verifyState = { nodes };
+  const v = $("verdict");
+  const total = Object.values(chains).reduce((a,c)=>a+c.length,0);
+  if(!broken.length){
+    v.className = "verdictstrip ok";
+    v.innerHTML = `<span class="p">VERIFIED</span> — <span class="hl">${total}</span>
+      <span class="en">entries across ${Object.keys(chains).length} node chains recompute exactly from their
+      stored payloads. Genesis matches sha256("STIGMERGY_GENESIS"), every prev_hash links, every entry_hash
+      reproduces.</span><span class="es">entradas en ${Object.keys(chains).length} cadenas de nodo se
+      recomputan exactamente desde sus payloads guardados. El génesis coincide con
+      sha256("STIGMERGY_GENESIS"), cada prev_hash enlaza, cada entry_hash se reproduce.</span>`;
+  } else {
+    const b = broken[0];
+    v.className = "verdictstrip bad";
+    v.innerHTML = `<span class="r">FAILED</span> — <span class="hl">${b.nid}</span> seq
+      <span class="hl">${b.brokenAt}</span>: ${b.why}.<br>
+      ${b.expected ? `<span class="en">sealed</span><span class="es">sellado</span>
+        <span class="g">${b.expected}</span><br>
+        <span class="en">recomputed</span><span class="es">recomputado</span>
+        <span class="r">${b.actual}</span><br>` : ""}
+      <span class="en">The row can be edited. The evidence cannot: state is derivable from the chain, so the
+      forgery names itself.</span>
+      <span class="es">La fila se puede editar. La evidencia no: el estado se deriva de la cadena, así que la
+      falsificación se delata sola.</span>`;
+  }
+  renderNodes();
+  renderMerkle();
+}
+function renderMerkle(){
+  const heads = currentHeads();
+  if(!Object.keys(heads).length){ $("merkle").innerHTML = ""; return; }
+  const root = merkleRoot(heads);
+  const last = snapshots[snapshots.length-1];
+  $("merkle").innerHTML =
+    `<span class="label">merkle root over ${Object.keys(heads).length} chain heads</span> <b>${root}</b>` +
+    (last ? `<span class="label">snapshot ${last.seq} ${last.root===root ? "current" : "stale"}</span>` : "");
+}
+function takeSnapshot(){
+  const heads = currentHeads();
+  if(!Object.keys(heads).length) return;
+  const seq = snapshots.length;
+  const parent = seq === 0 ? LEDGER_GENESIS : snapshots[seq-1].root;
+  snapshots.push({ seq, parent, heads, root: merkleRoot(heads) });
+  renderMerkle();
+}
+
+/* ------------------------------------------------------------ the forge -- */
+function forge(){
+  if(!selected){ flashVerdict("Pick an entry first.","Elegí una entrada primero."); return; }
+  const input = $("forge-input");
+  if(!input) return;
+  const e = selected;
+  if(!tampered) tampered = { node_id: e.node_id, seq: e.seq, original: e.payload_json };
+  e.payload_json = input.value;                 // the row changes; the seal does not
+  tampered.node_id = e.node_id; tampered.seq = e.seq;
+  doVerify();
+}
+function restore(){
+  if(!tampered) return;
+  chains[tampered.node_id][tampered.seq].payload_json = tampered.original;
+  tampered = null;
+  doVerify();
+}
+function flashVerdict(en, es){
+  const v = $("verdict");
+  v.className = "verdictstrip";
+  v.innerHTML = `<span class="en">${en}</span><span class="es">${es}</span>`;
+}
+
+/* --------------------------------------------------------------- chrome -- */
+function setLang(l){
+  document.body.classList.toggle("lang-es", l === "es");
+  $("lang-en").classList.toggle("on", l !== "es");
+  $("lang-es").classList.toggle("on", l === "es");
+  document.documentElement.lang = l;
+}
+$("lang-en").onclick = () => setLang("en");
+$("lang-es").onclick = () => setLang("es");
+
+$("btn-run").onclick = () => setRunning(!running);
+$("btn-step").onclick = () => { setRunning(false); oneRound(); };
+$("btn-reset").onclick = () => { setRunning(false); seed(); flashVerdict(
+  "Field reseeded. Nothing verified yet.","Campo resembrado. Todavía no se verificó nada."); };
+$("btn-verify").onclick = doVerify;
+$("btn-snapshot").onclick = takeSnapshot;
+$("btn-forge").onclick = forge;
+$("btn-restore").onclick = restore;
+addEventListener("keydown", ev => {
+  if(ev.target.tagName === "INPUT") return;
+  if(ev.code === "Space"){ ev.preventDefault(); setRunning(false); oneRound(); }
+  if(ev.key === "v" || ev.key === "V") doVerify();
+});
+addEventListener("resize", resize);
+
+$("legend").innerHTML = THEME_LIST.map(t =>
+  `<span><i style="background:${THEME_COLOR[t]}"></i>${t}</span>`).join("") +
+  `<span><i style="background:transparent;border:1px solid var(--soil-3)"></i>` +
+  `<span class="en">neutral</span><span class="es">neutral</span></span>` +
+  `<span><i style="background:var(--soil-3)"></i><span class="en">reinforced</span>` +
+  `<span class="es">reforzada</span></span>`;
+
+$("provider-note").innerHTML = Provider.basis === "minilm"
+  ? `<span class="en"><b>Provider:</b> the pinned <span class="num">all-MiniLM-L6-v2</span> embeddings,
+      precomputed offline and quantized into this page; distances are computed live here. Same model the
+      cluster demo pins, so the convergence you see is semantic convergence.</span>
+     <span class="es"><b>Proveedor:</b> los embeddings fijados de <span class="num">all-MiniLM-L6-v2</span>,
+      precalculados offline y cuantizados dentro de esta página; las distancias se calculan acá en vivo. El
+      mismo modelo que fija la demo del clúster, así que la convergencia que ves es convergencia
+      semántica.</span>`
+  : `<span class="en"><b>Provider and corpus — read this before believing the convergence:</b> no
+      <span class="num">all-MiniLM-L6-v2</span> vectors were baked into this page, so recall runs a tf-idf
+      cosine (<span class="num">browser-lexical-tfidf-v1</span>) over a corpus written for it: every memory
+      carries several words of its home region's vocabulary. Lexical distance is a real distance, not a hash,
+      and on <em>this</em> corpus it is a truthful signal — which is exactly why the corpus is not
+      <span class="num">demo/corpus.py</span>. That one is written for the semantic provider, and under a
+      non-semantic provider <span class="num">run_demo.py</span> refuses to narrate convergence rather than
+      claim certainty it has not earned. So: the mechanism you are watching is the real one; the similarity
+      task underneath it has been made legible enough for a provider that fits in a browser tab. Run
+      <span class="num">tools/bake_embeddings.py</span> to swap in the pinned model's real vectors.</span>
+     <span class="es"><b>Proveedor y corpus — leé esto antes de creerle a la convergencia:</b> no se
+      hornearon vectores de <span class="num">all-MiniLM-L6-v2</span> en esta página, así que el recall corre
+      un coseno tf-idf (<span class="num">browser-lexical-tfidf-v1</span>) sobre un corpus escrito para él:
+      cada memoria lleva varias palabras del vocabulario de su región de origen. La distancia léxica es una
+      distancia real, no un hash, y sobre <em>este</em> corpus es una señal verdadera — que es justamente por
+      qué el corpus no es <span class="num">demo/corpus.py</span>. Ese está escrito para el proveedor
+      semántico, y con un proveedor no semántico <span class="num">run_demo.py</span> se niega a narrar
+      convergencia en vez de afirmar una certeza que no se ganó. Entonces: el mecanismo que mirás es el real;
+      la tarea de similitud de abajo se hizo lo bastante legible para un proveedor que entra en una pestaña.
+      Corré <span class="num">tools/bake_embeddings.py</span> para meter los vectores reales del modelo
+      fijado.</span>`;
+
+/* ======================================================= sealed bundles === */
+/* The same six checks audit/bundle.py runs, reimplemented here so a bundle can
+   be verified by two independent implementations — one of them a browser tab
+   with nothing installed. If they ever disagree, one of them is wrong, and
+   tests/test_canonical_cross_impl.py exists to catch that. */
+const BUNDLE_CLAIMS = [
+  ["B1", "the bundle as shipped is the bundle as sealed",
+         "el bundle que llegó es el bundle que se selló"],
+  ["B2", "every chain relinks: genesis, dense sequence, prev_hash linkage",
+         "cada cadena reenlaza: génesis, secuencia densa, enlace prev_hash"],
+  ["B3", "every entry hash recomputes from its stored payload",
+         "cada hash de entrada se recomputa desde su payload guardado"],
+  ["B4", "the content shipped is the content born",
+         "el contenido que llegó es el contenido que nació"],
+  ["B5", "declared memory state reproduces from replaying the chains",
+         "el estado declarado se reproduce replayando las cadenas"],
+  ["B6", "every Merkle snapshot recomputes over its recorded heads",
+         "cada snapshot Merkle se recomputa sobre sus cabezas registradas"],
+];
+const REPLAYED_EVENTS = new Set(["MEMORY_STORED","MEMORY_REINFORCED","MEMORY_MIGRATED",
+                                 "REDISCOVERED","MEMORIES_ORPHANED"]);
+const SEAL_KEY = "bundle_sha256";
+
+function sealOf(bundle){
+  const body = {};
+  for(const k of Object.keys(bundle)) if(k !== SEAL_KEY) body[k] = bundle[k];
+  return sha256(canonicalJSON(body));
+}
+function bundleEntryHash(node_id, e){
+  return sha256(e.prev_hash + canonicalJSON({
+    node_id, seq: e.seq, event_type: e.event_type, reason: e.reason,
+    created_at: e.created_at, payload: e.payload,
+  }));
+}
+/* Entries across every node in one canonical order — timestamp, then node_id
+   and seq so ties resolve identically in both implementations. */
+function orderedEntries(chains){
+  const out = [];
+  for(const nid of Object.keys(chains).sort())
+    for(const e of chains[nid]) out.push([e.created_at || "", nid, e.seq || 0, e]);
+  out.sort((a,b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1
+                  : a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : a[2] - b[2]);
+  return out;
+}
+function replayBundleState(chains){
+  const state = {};
+  for(const [,,,e] of orderedEntries(chains)){
+    const p = e.payload || {};
+    if(!REPLAYED_EVENTS.has(e.event_type)) continue;
+    if(e.event_type === "MEMORY_STORED"){
+      state[p.memory_id] = { region_id:p.region_id, confidence:p.confidence,
+                             state:"NEUTRAL", tier:"SHORT_TERM" };
+    } else if(e.event_type === "MEMORY_REINFORCED"){
+      const m = state[p.memory_id];
+      if(m){ m.state = p.new_state; m.confidence = p.new_confidence; }
+    } else if(e.event_type === "MEMORY_MIGRATED"){
+      const m = state[p.memory_id];
+      if(m){ m.region_id = p.target_region; m.tier = p.new_tier; }
+    } else if(e.event_type === "REDISCOVERED"){
+      const m = state[p.memory_id];
+      if(m) m.tier = p.new_tier;
+    } else if(e.event_type === "MEMORIES_ORPHANED"){
+      for(const o of (p.orphaned || [])){ const m = state[o.memory_id]; if(m) m.tier = "ORPHANED"; }
+    }
+  }
+  return state;
+}
+function verifyBundleJS(b){
+  const checks = BUNDLE_CLAIMS.map(([id,en,es]) => ({ id, en, es, ok:true, detail:"" }));
+  const by = id => checks.find(c => c.id === id);
+  const fail = (id, detail) => { const c = by(id); if(c.ok){ c.ok = false; c.detail = detail; } };
+
+  let recomputed = null;
+  try { recomputed = sealOf(b); }
+  catch(err){ fail("B1", "bundle is not canonicalizable: " + err.message); }
+  if(recomputed !== null && b[SEAL_KEY] !== recomputed)
+    fail("B1", `declared ${b[SEAL_KEY]}, recomputed ${recomputed}`);
+
+  const chains = b.chains || {};
+  for(const nid of Object.keys(chains).sort()){
+    let expectedPrev = GENESIS_PREV;
+    const list = chains[nid];
+    for(let i=0;i<list.length;i++){
+      const e = list[i];
+      if(e.seq !== i){ fail("B2", `${nid}: expected seq ${i}, found ${e.seq}`); break; }
+      if(e.prev_hash !== expectedPrev){
+        fail("B2", `${nid} seq ${i}: prev_hash does not link to the entry before it`); break; }
+      let h;
+      try { h = bundleEntryHash(nid, e); }
+      catch(err){ fail("B3", `${nid} seq ${i}: entry is not hashable (${err.message})`); break; }
+      if(h !== e.entry_hash){
+        fail("B3", `${nid} seq ${i}: sealed ${e.entry_hash}, recomputed ${h}`); break; }
+      expectedPrev = e.entry_hash;
+    }
+  }
+
+  for(const m of (b.memories || [])){
+    if(!m.content_sha256) continue;
+    if(sha256(m.content || "") !== m.content_sha256)
+      fail("B4", `${m.memory_id}: content does not hash to its recorded digest`);
+  }
+
+  const replayed = replayBundleState(chains);
+  for(const m of (b.memories || [])){
+    const r = replayed[m.memory_id];
+    if(!r){ fail("B5", `${m.memory_id}: no MEMORY_STORED in the bundle — its state is not derivable`); continue; }
+    for(const k of ["region_id","state","tier","confidence"]){
+      const mine = k === "region_id" ? m.region_id : k === "state" ? m.state
+                 : k === "tier" ? m.tier : m.confidence;
+      if(mine !== r[k]){ fail("B5", `${m.memory_id}: declared ${k}=${mine}, replay says ${r[k]}`); break; }
+    }
+  }
+
+  for(const s of (b.snapshots || [])){
+    const heads = s.node_chain_heads || {};
+    let root;
+    try { root = merkleRoot(heads); }
+    catch(err){ fail("B6", `snapshot ${s.snapshot_seq}: heads unusable`); continue; }
+    if(root !== s.merkle_root){
+      fail("B6", `snapshot ${s.snapshot_seq}: declared ${s.merkle_root}, recomputed ${root}`); continue; }
+    for(const nid of Object.keys(heads)){
+      if(!chains[nid])
+        fail("B6", `snapshot ${s.snapshot_seq} commits to node "${nid}", which the bundle does not contain`);
+      else if(!chains[nid].some(e => e.entry_hash === heads[nid]))
+        fail("B6", `snapshot ${s.snapshot_seq}: head for ${nid} appears nowhere in that node's chain`);
+    }
+  }
+  return checks;
+}
+
+/* decimal string at canonical scale -> exact rational, no float in between */
+function decToF(text){
+  const s = String(text == null ? "0" : text).trim();
+  const neg = s.startsWith("-");
+  const [ip, fp=""] = (neg ? s.slice(1) : s).split(".");
+  const digits = ip + fp;
+  return new F(BigInt(neg ? "-" + digits : digits), 10n ** BigInt(fp.length));
+}
+
+function loadBundleObject(b, sourceLabel){
+  if(!b || typeof b !== "object" || !b.chains)
+    throw new Error("that file is not a STIGMERGY bundle (no chains).");
+  setRunning(false);
+  MODE = "bundle"; loadedBundle = b; selected = null; tampered = null; verifyState = null;
+
+  REGION_IDS = (b.regions || []).map(r => r.region_id).sort();
+  regions = {};
+  for(const rid of REGION_IDS) regions[rid] = { id: rid, theme: rid, members: [] };
+
+  memories = (b.memories || []).map((m,i) => ({
+    id: m.memory_id, content: m.content, region: m.region_id, homeTheme: null,
+    misplaced: false, tier: m.tier, state: m.state,
+    confidence: decToF(m.confidence), emb: null, lastMigratedAt: null,
+    custody: m.custody_status, x:0, y:0, tx:0, ty:0, born:i,
+  }));
+  for(const m of memories){
+    if(!regions[m.region]){ regions[m.region] = { id:m.region, theme:m.region, members:[] };
+      if(!REGION_IDS.includes(m.region)) REGION_IDS.push(m.region); }
+    regions[m.region].members.push(m.id);
+  }
+
+  chains = {};
+  for(const nid of Object.keys(b.chains).sort())
+    chains[nid] = b.chains[nid].map(e => ({
+      node_id: nid, seq: e.seq, prev_hash: e.prev_hash, entry_hash: e.entry_hash,
+      event_type: e.event_type, reason: e.reason, created_at: e.created_at,
+      payload_json: canonicalJSON(e.payload), fresh: false,
+    }));
+
+  snapshots = (b.snapshots || []).map(s => ({
+    seq: s.snapshot_seq, parent: null, heads: s.node_chain_heads, root: s.merkle_root }));
+
+  /* Nodes, not agents: a bundle records what each node wrote, and the last mode
+     it announced. Nothing here is running. */
+  agents = Object.keys(chains).map((nid,i) => {
+    const last = [...chains[nid]].reverse().find(e => e.event_type === "AGENT_MODE_CHANGED");
+    const p = last ? JSON.parse(last.payload_json) : null;
+    return { agent_id: p ? p.agent_id : nid, node_id: nid,
+             mode: p ? p.new_mode : "—", ema: p ? decToF(p.ema) : F0,
+             stagnation: p ? (p.stagnation_count || 0) : 0,
+             region: p ? p.current_region : null,
+             entries: chains[nid].length, x:0, y:0, tx:0, ty:0 };
+  });
+
+  signals = (b.signals || []).map(s => ({
+    id: s.signal_id, memory_id: s.memory_id, origin_region: s.origin_region,
+    vigor: decToF(s.vigor), strength: decToF(s.signal_strength), rate: decToF(s.decay_rate),
+    created_at: 0, expires_at: 0, status: s.status,
+  }));
+
+  tick = 0;
+  sealed = Object.values(chains).reduce((a,c) => a + c.length, 0);
+  bundleChecks = verifyBundleJS(b);
+  bundleSource = sourceLabel || "file";
+  applyMode();
+  layoutAll(true);
+  renderAll();
+  doVerify();
+  document.querySelector(".carbon").scrollIntoView({ behavior: "smooth" });
+}
+let bundleSource = "";
+
+function applyMode(){
+  const bundle = MODE === "bundle";
+  $("btn-run").hidden = bundle;
+  $("btn-step").hidden = bundle;
+  $("btn-sim").hidden = !bundle;
+  $("agents-title").innerHTML = bundle
+    ? `<span class="en">Nodes in this bundle</span><span class="es">Nodos en este bundle</span>`
+    : `<span class="en">Agents</span><span class="es">Agentes</span>`;
+  $("agents-note").innerHTML = bundle
+    ? `<span class="en">last mode each announced</span><span class="es">último modo que anunció cada uno</span>`
+    : `<span class="en">no channel between them</span><span class="es">sin canal entre ellos</span>`;
+  $("signals-title").innerHTML = bundle
+    ? `<span class="en">Recorded recruitment signals</span><span class="es">Señales de reclutamiento registradas</span>`
+    : `<span class="en">Live recruitment signals</span><span class="es">Señales de reclutamiento vivas</span>`;
+  $("score-title").innerHTML = bundle
+    ? `<span class="en">What this bundle contains</span><span class="es">Qué contiene este bundle</span>`
+    : `<span class="en">Misplaced memories home</span><span class="es">Memorias mal ubicadas en casa</span>`;
+  $("score-note").innerHTML = bundle
+    ? `<span class="en">as exported</span><span class="es">tal como se exportó</span>`
+    : `<span class="en">by consensus only</span><span class="es">sólo por consenso</span>`;
+  document.body.classList.toggle("mode-bundle", bundle);
+}
+
+function renderBundleChecks(){
+  const el = $("bundlechecks");
+  if(MODE !== "bundle" || !bundleChecks){ el.innerHTML = ""; return; }
+  const bad = bundleChecks.filter(c => !c.ok).length;
+  const b = loadedBundle;
+  const entries = Object.values(chains).reduce((a,c)=>a+c.length,0);
+  el.innerHTML = `
+    <div class="bundlehead">
+      <div>
+        <span class="label"><span class="en">sealed bundle</span><span class="es">bundle sellado</span></span>
+        <div class="bseal">${b[SEAL_KEY] || "(unsealed)"}</div>
+        <div class="bmeta">v${b.bundle_version} · ${b.generator || "?"} ·
+          ${(b.memories||[]).length} memories · ${Object.keys(chains).length} node chains ·
+          ${entries} entries · ${(b.snapshots||[]).length} snapshots
+          ${b.note ? " · " + escapeHtml(b.note) : ""}</div>
+      </div>
+      <div class="bverdict ${bad ? "bad":"ok"}">${bad
+        ? `${bad} <span class="en">check(s) failed</span><span class="es">comprobación(es) fallaron</span>`
+        : `<span class="en">verified</span><span class="es">verificado</span>`}</div>
+    </div>
+    <div class="blist">${bundleChecks.map(c => `
+      <div class="bcheck ${c.ok?"pass":"fail"}">
+        <span class="bid">${c.id}</span>
+        <span class="bclaim"><span class="en">${c.en}</span><span class="es">${c.es}</span></span>
+        <span class="bmark">${c.ok ? "PASS" : "FAIL"}</span>
+        ${c.ok ? "" : `<span class="bdetail">${escapeHtml(c.detail)}</span>`}
+      </div>`).join("")}</div>
+    <div class="bnote">
+      <span class="en"><b>What these six checks do not cover:</b> that the writer was
+        authorised (that is enforced at the database and leaves no artifact a detached file
+        can re-check), that nothing was dropped wholesale (B6 catches it only if a snapshot
+        already committed to the missing node), and the per-memory custody chains, which are
+        out of scope for bundle version 1.</span>
+      <span class="es"><b>Lo que estas seis comprobaciones no cubren:</b> que quien escribió
+        estuviera autorizado (eso se valida en la base y no deja rastro que un archivo suelto
+        pueda re-verificar), que no se haya omitido algo entero (B6 lo detecta sólo si un
+        snapshot ya se comprometía con el nodo faltante), y las cadenas de custodia por
+        memoria, fuera de alcance en la versión 1 del bundle.</span>
+    </div>`;
+}
+
+$("btn-load").onclick = () => $("bundle-file").click();
+$("bundle-file").onchange = ev => {
+  const f = ev.target.files && ev.target.files[0];
+  if(!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try { loadBundleObject(JSON.parse(r.result), f.name); }
+    catch(err){ flashVerdict("Could not open that bundle: " + err.message,
+                             "No se pudo abrir ese bundle: " + err.message); }
+  };
+  r.readAsText(f);
+  ev.target.value = "";
+};
+$("btn-sim").onclick = () => { MODE = "simulation"; applyMode(); seed();
+  $("bundlechecks").innerHTML = "";
+  flashVerdict("Back to the in-browser simulation.", "De vuelta en la simulación del navegador."); };
+
+/* ?bundle=URL — works when the page is served over HTTP; a browser opened
+   from file:// will refuse the fetch, and the picker still works. */
+(function(){
+  const url = new URLSearchParams(location.search).get("bundle");
+  if(!url) return;
+  fetch(url).then(r => { if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then(b => loadBundleObject(b, url))
+    .catch(err => flashVerdict(
+      "Could not fetch " + escapeHtml(url) + ": " + err.message +
+        " — open the file with the picker instead.",
+      "No se pudo traer " + escapeHtml(url) + ": " + err.message +
+        " — abrí el archivo con el selector."));
+})();
+
+/* Export the running simulation in the same bundle format the cluster exports,
+   so the file this page produces can be checked by the OTHER implementation:
+       python -m tools.verify_bundle stigmergy-run.bundle.json
+   That round trip is the claim. If the browser and the Python verifier ever
+   disagree about a bundle, one of them is wrong. */
+function buildBundle(){
+  const heads = currentHeads();
+  const body = {
+    bundle_version: 1,
+    generator: "stigmergy/demo/console.html",
+    note: "in-browser simulation · provider " + Provider.id,
+    regions: REGION_IDS.map(rid => ({
+      region_id: rid, locality: "demo", status: "ACTIVE", generation: 1 })),
+    memories: memories.map(m => ({
+      memory_id: m.id, region_id: m.region, content: m.content,
+      content_sha256: sha256(m.content), state: m.state, tier: m.tier,
+      confidence: m.confidence.q(), custody_status: "CLEAN" })),
+    signals: signals.map(s => ({
+      signal_id: s.id, memory_id: s.memory_id, origin_region: s.origin_region,
+      vigor: s.vigor.q(), signal_strength: s.strength.q(), decay_rate: s.rate.q(),
+      status: s.status, created_at: formatTs(s.created_at),
+      expires_at: formatTs(s.expires_at) })),
+    chains: Object.fromEntries(Object.keys(chains).sort().map(nid => [nid,
+      chains[nid].map(e => ({
+        seq: e.seq, prev_hash: e.prev_hash, entry_hash: e.entry_hash,
+        event_type: e.event_type, reason: e.reason, created_at: e.created_at,
+        payload: JSON.parse(e.payload_json) }))])),
+    snapshots: snapshots.map(s => ({
+      snapshot_seq: s.seq, node_chain_heads: s.heads, merkle_root: s.root,
+      ledger_hash: s.parent || LEDGER_GENESIS,
+      created_at: formatTs(Date.now()) })),
+  };
+  if(!body.snapshots.length && Object.keys(heads).length)
+    body.snapshots.push({ snapshot_seq: 0, node_chain_heads: heads,
+      merkle_root: merkleRoot(heads), ledger_hash: LEDGER_GENESIS,
+      created_at: formatTs(Date.now()) });
+  body[SEAL_KEY] = sealOf(body);
+  return body;
+}
+function exportBundle(){
+  if(MODE === "bundle"){
+    flashVerdict("Already showing a loaded bundle — there is nothing new to seal.",
+                 "Ya estás viendo un bundle cargado — no hay nada nuevo que sellar.");
+    return;
+  }
+  const b = buildBundle();
+  const checks = verifyBundleJS(b);
+  const bad = checks.filter(c => !c.ok);
+  const blob = new Blob([JSON.stringify(b)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "stigmergy-run.bundle.json";
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+  const v = $("verdict");
+  v.className = "verdictstrip " + (bad.length ? "bad" : "ok");
+  v.innerHTML = bad.length
+    ? `<span class="r">SEALED, BUT SELF-CHECK FAILED</span> — ` +
+      bad.map(c => `${c.id}: ${escapeHtml(c.detail)}`).join("<br>")
+    : `<span class="p">SEALED</span> <span class="g">${b[SEAL_KEY]}</span><br>
+       <span class="en">stigmergy-run.bundle.json — ${b.memories.length} memories,
+         ${Object.keys(b.chains).length} node chains. It passes B1\u2013B6 here; check it
+         against the other implementation with
+         <span class="num">python -m tools.verify_bundle stigmergy-run.bundle.json</span>.</span>
+       <span class="es">stigmergy-run.bundle.json — ${b.memories.length} memorias,
+         ${Object.keys(b.chains).length} cadenas de nodo. Pasa B1\u2013B6 acá; verificalo
+         contra la otra implementación con
+         <span class="num">python -m tools.verify_bundle stigmergy-run.bundle.json</span>.</span>`;
+}
+$("btn-export").onclick = exportBundle;
+
+/* A named inspection handle, so the field can be driven and audited from a
+   console or a test harness without reaching into closures. */
+window.STIGMERGY = {
+  oneRound, seed, doVerify, takeSnapshot, verifyChain, merkleRoot, currentHeads,
+  sha256, canonicalJSON, entryHash, F, Fr,
+  sealOf, verifyBundle: verifyBundleJS, replayBundleState, loadBundle: loadBundleObject,
+  buildBundle, exportBundle,
+  bundleChecks: () => bundleChecks,
+  mode: () => MODE,
+  provider: () => ({ id: Provider.id, basis: Provider.basis }),
+  state: () => ({
+    tick, sealed, running,
+    misplacedHome: memories.filter(m => m.misplaced && themeOfRegion(m.region) === m.homeTheme).length,
+    misplaced: memories.filter(m => m.misplaced)
+      .map(m => ({ id: m.id, home: m.homeTheme, at: themeOfRegion(m.region) })),
+    liveSignals: signals.filter(s => s.status === "PENDING" &&
+      decayedStrength(s, Date.now()) >= LIVENESS_FLOOR).length,
+    agents: agents.map(a => ({ id: a.agent_id, mode: a.mode, ema: a.ema.q(6), region: a.region })),
+    chains: Object.fromEntries(Object.entries(chains).map(([k,v]) => [k, v.length])),
+  }),
+};
+
+resize();
+seed();
+requestAnimationFrame(drawField);
+</script>
+</body>
+</html>

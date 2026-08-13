@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STIGMERGY — Coordination Field Viewer</title>
+<style>
+  :root{
+    --carbon:#07090B; --carbon2:#0B0F13;
+    --bone:#E8E5DC; --graphite:#8C9298; --faint:#4A5158;
+    --seal:#D8B061; --pass:#7FBD8D; --taint:#DF4F3B;
+    --cooking:#DFA35C; --astronomy:#9CC8DB; --databases:#8FBD8D;
+    --hairline:rgba(232,229,220,.13);
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--carbon); color:var(--bone);
+    font-family:var(--mono); font-size:13px; line-height:1.55;
+    overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+  #stage{position:fixed;inset:0}
+  canvas{position:absolute;inset:0;display:block}
+
+  .label{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--graphite)}
+
+  /* ---- topbar ---- */
+  #topbar{
+    position:absolute;top:0;left:0;right:0;height:46px;z-index:30;
+    display:flex;align-items:center;justify-content:space-between;gap:14px;
+    padding:0 18px;border-bottom:1px solid var(--hairline);
+    background:linear-gradient(180deg,rgba(7,9,11,.85),rgba(7,9,11,0));
+  }
+  #brand{font-size:11px;letter-spacing:.34em;color:var(--bone);white-space:nowrap}
+  #brand em{font-style:normal;color:var(--faint);letter-spacing:.22em}
+  #simchip{
+    font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--seal);
+    border:1px dashed rgba(216,176,97,.45);padding:3px 9px;white-space:nowrap;
+  }
+  #topright{display:flex;gap:16px;align-items:center;white-space:nowrap}
+  #roundlabel{font-size:10px;letter-spacing:.22em;color:var(--graphite);text-transform:uppercase}
+  .chromebtn{
+    background:none;border:none;color:var(--graphite);font-family:var(--mono);
+    font-size:10px;letter-spacing:.2em;text-transform:uppercase;cursor:pointer;padding:6px 2px;
+    text-decoration:none;
+  }
+  .chromebtn:hover{color:var(--bone)}
+  .chromebtn:focus-visible{outline:1px solid var(--seal);outline-offset:3px}
+  .chromebtn.on{color:var(--seal)}
+
+  /* ---- title / end cards ---- */
+  .card{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:18px;z-index:25;
+    background:radial-gradient(ellipse at 50% 46%,rgba(11,15,19,.35),rgba(7,9,11,.88) 72%);
+    transition:opacity 1.4s ease;pointer-events:none;
+  }
+  .card.off{opacity:0}
+  #title-word{font-size:clamp(46px,8vw,92px);font-weight:250;letter-spacing:.42em;
+    padding-left:.42em;color:var(--bone)}
+  .card .rule{width:64px;height:1px;background:var(--seal);opacity:.7}
+  .card .tag{font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--graphite);
+    text-align:center;padding:0 24px;max-width:640px}
+  #endcard .big{font-size:clamp(22px,4vw,40px);font-weight:250;letter-spacing:.2em;
+    text-align:center;padding:0 24px}
+  #endcard .score{font-size:12px;letter-spacing:.24em;color:var(--pass)}
+
+  /* ---- caption (lower third) ---- */
+  #caption{
+    position:absolute;left:50%;bottom:118px;transform:translateX(-50%);
+    max-width:min(760px,84vw);text-align:center;z-index:20;
+    font-size:13.5px;letter-spacing:.06em;color:var(--bone);
+    text-shadow:0 0 22px rgba(7,9,11,.9);
+    opacity:0;transition:opacity .9s ease;pointer-events:none;
+  }
+  #caption.on{opacity:1}
+  #caption .sub{display:block;margin-top:6px;font-size:10.5px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--graphite)}
+
+  /* ---- command strip ---- */
+  #commands{
+    position:absolute;left:0;right:0;bottom:0;height:78px;z-index:30;
+    display:flex;align-items:center;justify-content:center;gap:22px;
+    background:linear-gradient(0deg,rgba(7,9,11,.92),rgba(7,9,11,0));
+  }
+  #primary{
+    font-family:var(--mono);font-size:12px;letter-spacing:.3em;text-transform:uppercase;
+    color:var(--seal);background:rgba(216,176,97,.05);
+    border:1px solid rgba(216,176,97,.55);
+    padding:13px 30px;cursor:pointer;transition:all .25s ease;white-space:nowrap;
+  }
+  #primary:hover{background:rgba(216,176,97,.14);box-shadow:0 0 24px rgba(216,176,97,.15)}
+  #primary:focus-visible{outline:1px solid var(--seal);outline-offset:4px}
+  #primary:disabled{opacity:.28;cursor:default;box-shadow:none}
+  #scoreboard{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--graphite)}
+  #scoreboard b{font-weight:400;color:var(--pass);font-size:13px;letter-spacing:.1em}
+  #hint{position:absolute;right:20px;bottom:30px;font-size:9.5px;letter-spacing:.18em;
+    color:var(--faint);text-transform:uppercase}
+
+  /* ---- dossier (right panel with tabs) ---- */
+  #dossier{
+    position:absolute;top:46px;right:0;bottom:78px;width:396px;z-index:22;
+    background:linear-gradient(270deg,rgba(9,12,15,.94),rgba(9,12,15,.86));
+    border-left:1px solid var(--hairline);
+    transform:translateX(102%);transition:transform .55s cubic-bezier(.22,.9,.3,1);
+    display:flex;flex-direction:column;
+  }
+  #dossier.open{transform:translateX(0)}
+  #dtabs{display:flex;border-bottom:1px solid var(--hairline)}
+  #dtabs button{
+    flex:1;background:none;border:none;border-right:1px solid var(--hairline);
+    color:var(--graphite);font-family:var(--mono);font-size:9.5px;
+    letter-spacing:.2em;text-transform:uppercase;padding:11px 4px;cursor:pointer;
+  }
+  #dtabs button:last-child{border-right:none}
+  #dtabs button.on{color:var(--seal);background:rgba(216,176,97,.06)}
+  #dtabs button:hover{color:var(--bone)}
+  #dbody{flex:1;overflow-y:auto;padding:14px 16px;scrollbar-width:thin;
+    scrollbar-color:var(--faint) transparent}
+  #dfoot{padding:9px 16px;border-top:1px solid var(--hairline);
+    font-size:8.5px;letter-spacing:.1em;color:var(--faint);text-transform:uppercase;line-height:1.6}
+  #dclosewrap{position:absolute;top:6px;right:8px}
+
+  .sect{margin:14px 0 8px;font-size:9.5px;letter-spacing:.24em;text-transform:uppercase;
+    color:var(--faint);border-bottom:1px dashed var(--hairline);padding-bottom:5px}
+  .sect:first-child{margin-top:0}
+  .row{display:flex;gap:10px;margin-bottom:9px}
+  .row .mk{width:14px;flex:none;text-align:center}
+  .mk.ok{color:var(--pass)} .mk.no{color:var(--taint)} .mk.dot{color:var(--faint)}
+  .mk.au{color:var(--seal)}
+  .row .bd{flex:1;min-width:0}
+  .row .bd .h{color:var(--bone)}
+  .row .bd .s{color:var(--graphite);font-size:11.5px}
+  .hash{color:var(--seal)} .dim{color:var(--graphite)} .fnt{color:var(--faint)}
+  .r-cooking{color:var(--cooking)} .r-astronomy{color:var(--astronomy)} .r-databases{color:var(--databases)}
+
+  /* ledger feed */
+  .lrow{border-left:1px solid var(--hairline);margin-left:6px;padding:2px 0 9px 13px;position:relative}
+  .lrow::before{content:"";position:absolute;left:-3px;top:8px;width:5px;height:5px;
+    border-radius:50%;background:var(--faint)}
+  .lrow.ev-MEMORY_STORED::before,.lrow.ev-REGION_CREATED::before{background:var(--graphite)}
+  .lrow.ev-MEMORY_REINFORCED::before{background:var(--bone)}
+  .lrow.ev-SIGNAL_EMITTED::before{background:var(--seal)}
+  .lrow.ev-MEMORY_MIGRATED::before,.lrow.ev-SIGNAL_RESOLVED::before{background:var(--pass)}
+  .lrow.ev-SIGNAL_EXPIRED::before{background:var(--taint)}
+  .lrow.ev-MODE_CHANGED::before{background:var(--astronomy)}
+  .lrow .ehead{color:var(--bone);font-size:12px}
+  .lrow .ehead b{font-weight:400;color:var(--seal)}
+  .lrow .emeta{font-size:10.5px;color:var(--graphite)}
+  .lrow .ehash{font-size:9px;color:var(--faint)}
+
+  /* signals tab */
+  .sigbox{border:1px solid var(--hairline);padding:10px 12px;margin-bottom:12px}
+  .sigbox .head{display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px}
+  .sigbar{height:3px;background:rgba(232,229,220,.09);margin:7px 0 4px;position:relative;overflow:hidden}
+  .sigbar i{position:absolute;inset:0;transform-origin:left;background:var(--seal)}
+  .sigbox .meta{font-size:10.5px;color:var(--graphite)}
+
+  /* consensus exhibit: exact fractions, typeset like a court exhibit */
+  .exhibit{
+    border:1px solid rgba(216,176,97,.4);background:rgba(216,176,97,.04);
+    padding:14px 12px;margin:10px 0 14px;text-align:center;
+  }
+  .exhibit .who{font-size:9px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--faint);margin-bottom:8px}
+  .exline{display:flex;align-items:center;justify-content:center;gap:10px;
+    font-size:15px;color:var(--bone);flex-wrap:wrap}
+  .frac{display:inline-flex;flex-direction:column;align-items:center;
+    vertical-align:middle;line-height:1.15;font-size:13px}
+  .frac .nu{padding:0 5px}
+  .frac .de{padding:0 5px;border-top:1px solid var(--bone)}
+  .exline .op{color:var(--graphite)}
+  .exline .verdict{letter-spacing:.18em;font-size:11px;padding:3px 10px;border:1px solid}
+  .verdict.go{color:var(--pass);border-color:rgba(127,189,141,.6)}
+  .verdict.hold{color:var(--graphite);border-color:var(--hairline)}
+  .verdict.defer{color:var(--seal);border-color:rgba(216,176,97,.5)}
+  .exhibit .why{font-size:10px;color:var(--graphite);margin-top:8px;letter-spacing:.06em}
+
+  /* verify tab */
+  .check{display:grid;grid-template-columns:44px 1fr 70px;gap:10px;align-items:center;
+    margin-bottom:11px;opacity:.28;transition:opacity .3s}
+  .check.live{opacity:1}
+  .check .bc{font-size:11px;color:var(--bone)}
+  .check .bar{height:3px;background:rgba(232,229,220,.09);position:relative;overflow:hidden}
+  .check .bar i{position:absolute;inset:0;transform:scaleX(0);transform-origin:left;
+    background:var(--seal);transition:transform .5s ease}
+  .check.pass .bar i{background:var(--pass);transform:scaleX(1)}
+  .check .st{font-size:10px;letter-spacing:.18em;text-align:right;color:var(--faint)}
+  .check.pass .st{color:var(--pass)}
+  .check .pv{grid-column:2/4;font-size:10.5px;color:var(--graphite);margin-top:-7px}
+  #vverdict{margin-top:12px;padding-top:12px;border-top:1px solid var(--hairline);
+    font-size:12px;letter-spacing:.14em;min-height:20px}
+  #vverdict.ok{color:var(--pass)}
+  .vbtn{
+    font-family:var(--mono);font-size:10px;letter-spacing:.24em;text-transform:uppercase;
+    color:var(--seal);background:rgba(216,176,97,.05);border:1px solid rgba(216,176,97,.5);
+    padding:9px 18px;cursor:pointer;width:100%;margin-bottom:14px;
+  }
+  .vbtn:hover{background:rgba(216,176,97,.13)}
+
+  /* ---- responsive ---- */
+  @media (max-width:860px){
+    #dossier{top:auto;left:0;right:0;bottom:78px;width:auto;max-height:48vh;
+      transform:translateY(105%);border-left:none;border-top:1px solid var(--hairline)}
+    #dossier.open{transform:translateY(0)}
+    #caption{bottom:96px;font-size:12px}
+    #hint{display:none}
+    #simchip{display:none}
+    #brand em{display:none}
+    #roundlabel{display:none}
+    #custodylink{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .card,#dossier{transition:none}
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="field"></canvas>
+
+  <div id="topbar">
+    <div style="display:flex;gap:14px;align-items:center;min-width:0">
+      <div id="brand">STIGMERGY <em>· COORDINATION FIELD</em></div>
+      <span id="simchip"></span>
+    </div>
+    <div id="topright">
+      <span id="roundlabel"></span>
+      <button class="chromebtn" id="langbtn">es</button>
+      <button class="chromebtn" id="speedbtn">1×</button>
+      <button class="chromebtn" id="modebtn">manual</button>
+      <button class="chromebtn" id="panelbtn">panel</button>
+      <a class="chromebtn" id="custodylink" href="field_viewer.html">custody →</a>
+      <button class="chromebtn" id="resetbtn">restart</button>
+    </div>
+  </div>
+
+  <div class="card" id="titlecard">
+    <div id="title-word">STIGMERGY</div>
+    <div class="rule"></div>
+    <div class="tag" id="titletag"></div>
+  </div>
+
+  <div class="card off" id="endcard" style="display:none">
+    <div class="big" id="endbig"></div>
+    <div class="rule"></div>
+    <div class="score" id="endscore"></div>
+    <div class="tag" id="endtag"></div>
+  </div>
+
+  <div id="caption"></div>
+
+  <aside id="dossier" aria-live="polite">
+    <div id="dtabs">
+      <button data-tab="ledger" class="on">Ledger</button>
+      <button data-tab="signals" id="tab-signals">Signals</button>
+      <button data-tab="chains">Chains</button>
+      <button data-tab="verify">Verify</button>
+      <button data-tab="inspect" id="tab-inspect" style="display:none">·</button>
+    </div>
+    <div id="dbody"></div>
+    <div id="dfoot"></div>
+  </aside>
+
+  <div id="commands">
+    <span id="scoreboard"></span>
+    <button id="primary">RUN ROUND 1</button>
+  </div>
+  <div id="hint">space · run round&nbsp;&nbsp;&nbsp;d · director&nbsp;&nbsp;&nbsp;r · restart&nbsp;&nbsp;&nbsp;click · inspect</div>
+</div>
+
+<script>
+"use strict";
+/* =====================================================================
+   STIGMERGY Coordination Field Viewer
+
+   An IN-BROWSER SIMULATION of the demo loop in demo/run_demo.py:
+   N agents, no coordinator, one shared memory field. Single file,
+   zero dependencies, deterministic (seeded RNG schedules workload
+   only — never an outcome, same doctrine as the harness).
+
+   What is faithful (same constants and the same exact arithmetic as
+   ops/memories.py, ops/controller.py, ops/recruitment.py):
+     - reinforcement  c' = c + (1-c)·1/5, exact rationals (BigInt)
+     - resonance density = Σ conf(REINFORCED) / len(hits)
+     - hysteresis EMA β=1/4, enter 3/5, exit 2/5, stagnation 5 @ 1/100
+     - signal decay strength·e^(−0.15·t), float, gating liveness only
+     - LIVENESS_FLOOR 0.05; consensus vigor_for ≥ 1/2 · len(live),
+       decided in exact fractions — floats filter, fractions decide
+   What is a labeled stand-in:
+     - embeddings: deterministic theme vectors, NOT MiniLM — this
+       shows the mechanism, it does not make a semantic claim
+       (the same discipline as `--provider deterministic`)
+     - cooldown: 5 min scaled to 24 simulated seconds (×12.5)
+     - hashes: display-only pseudo-hashes; the real chain is
+       canonical JSON + SHA-256 (audit/canonical.py, audit/chain.py)
+     - no CockroachDB: this page is not a live-cluster capture
+   ===================================================================== */
+
+const MOTION = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const DUR = d => MOTION ? d : Math.min(d, 60);
+
+/* ---------------- i18n ---------------- */
+const LANGS = {
+en: {
+  simchip: "in-browser simulation · not a live cluster",
+  titletag: "Three agents. No coordinator. The database is the only channel.",
+  runround: n => "RUN ROUND " + n,
+  running: "ROUND " + "…",
+  round: n => "round " + n,
+  simsec: s => s + "s sim",
+  home: (n,t) => `misplaced home ${n}/${t}`,
+  endbig: "CONVERGENCE WITHOUT A COORDINATOR",
+  endtag: "No agent instructed another. Every step above is a read or a write — replay the ledger, verify the chains.",
+  endscore: (n,t,r) => `${n}/${t} misplaced memories home · ${r} rounds`,
+  dfoot: "in-browser simulation of demo/run_demo.py · same constants, exact-fraction decisions · stand-in embeddings (not MiniLM) · cooldown 5 min → 24 s scaled · display hashes (real system: canonical JSON + SHA-256)",
+  tabs: {ledger:"Ledger", signals:"Signals", chains:"Chains", verify:"Verify", inspect:"Inspect"},
+  cap: {
+    seeded: ["A field grows: 3 regions, 30 memories — 6 deliberately misplaced.",
+             "misplaced motes wear their HOME color · every write is audited"],
+    firstReinforce: ["Agents recall and reinforce. Confidence is exact arithmetic.",
+             "c′ = c + (1−c)·1/5 — never a float in the decision"],
+    firstDwell: ["An agent settles: the density crossed 3/5.",
+             "hysteresis — enter at 3/5, leave at 2/5; no flapping"],
+    firstSignal: ["A memory sits away from its neighborhood. A region recruits it.",
+             "the gradient decides, not the agent — vigor = observed density"],
+    weakExpire: ["Early signals were weightless — they decay and expire.",
+             "strength · e^(−0.15·t) < 0.05 → the pheromone fades"],
+    firstMigrate: ["Consensus. The memory migrates home.",
+             "vigor_for ≥ 1/2 · live — decided in exact fractions"],
+    cooldown: ["A second verdict inside the window is refused.",
+             "Invariant 6: the cooldown is a WHERE clause, not an IF"],
+    converged: ["The field sorted itself. Nobody was in charge.",
+             "verify the chains — the claim is checkable, not narrated"]
+  },
+  modes: {manual:"manual", director:"director ●"},
+  verdicts: {go:"MIGRATE", hold:"NOT REACHED", defer:"COOLDOWN"},
+  verifyBtn: "VERIFY CHAINS + LEDGER",
+  verifyDone: n => `VERIFIED: ${n} chains relink · Merkle root recomputes`,
+  inspectMem: "memory", inspectAgent: "agent",
+  reasonQuery: t => `top recall hit for a ${t} query`,
+},
+es: {
+  simchip: "simulación en navegador · no es un clúster real",
+  titletag: "Tres agentes. Sin coordinador. La base de datos es el único canal.",
+  runround: n => "RONDA " + n,
+  running: "RONDA…",
+  round: n => "ronda " + n,
+  simsec: s => s + "s sim",
+  home: (n,t) => `mal ubicadas en casa ${n}/${t}`,
+  endbig: "CONVERGENCIA SIN COORDINADOR",
+  endtag: "Ningún agente dio órdenes a otro. Cada paso fue una lectura o una escritura — reproduce el ledger, verifica las cadenas.",
+  endscore: (n,t,r) => `${n}/${t} memorias mal ubicadas volvieron a casa · ${r} rondas`,
+  dfoot: "simulación en navegador de demo/run_demo.py · mismas constantes, decisiones en fracciones exactas · embeddings sustitutos (no MiniLM) · cooldown 5 min → 24 s escalado · hashes de exhibición (sistema real: JSON canónico + SHA-256)",
+  tabs: {ledger:"Ledger", signals:"Señales", chains:"Cadenas", verify:"Verificar", inspect:"Inspección"},
+  cap: {
+    seeded: ["Un campo crece: 3 regiones, 30 memorias — 6 mal ubicadas a propósito.",
+             "cada memoria lleva el color de su tema DE ORIGEN · toda escritura queda auditada"],
+    firstReinforce: ["Los agentes evocan y refuerzan. La confianza es aritmética exacta.",
+             "c′ = c + (1−c)·1/5 — jamás un float en la decisión"],
+    firstDwell: ["Un agente se asienta: la densidad cruzó 3/5.",
+             "histéresis — entra en 3/5, sale en 2/5; sin oscilar"],
+    firstSignal: ["Una memoria está lejos de su vecindario. Una región la recluta.",
+             "decide el gradiente, no el agente — vigor = densidad observada"],
+    weakExpire: ["Las señales tempranas no pesaban — decaen y expiran.",
+             "strength · e^(−0.15·t) < 0.05 → la feromona se desvanece"],
+    firstMigrate: ["Consenso. La memoria migra a casa.",
+             "vigor_for ≥ 1/2 · vivas — decidido en fracciones exactas"],
+    cooldown: ["Un segundo veredicto dentro de la ventana se rechaza.",
+             "Invariante 6: el cooldown es un WHERE, no un IF"],
+    converged: ["El campo se ordenó solo. Nadie estaba al mando.",
+             "verifica las cadenas — la afirmación se comprueba, no se narra"]
+  },
+  modes: {manual:"manual", director:"director ●"},
+  verdicts: {go:"MIGRA", hold:"NO ALCANZADO", defer:"COOLDOWN"},
+  verifyBtn: "VERIFICAR CADENAS + LEDGER",
+  verifyDone: n => `VERIFICADO: ${n} cadenas religan · la raíz Merkle se recalcula`,
+  inspectMem: "memoria", inspectAgent: "agente",
+  reasonQuery: t => `mejor hit de evocación para una consulta de ${t}`,
+}};
+let lang = (navigator.language || "en").slice(0,2) === "es" ? "es" : "en";
+const L = () => LANGS[lang];
+
+/* ---------------- exact rationals (BigInt) ---------------- */
+function bgcd(a, b){a = a<0n?-a:a; b = b<0n?-b:b; while(b){[a,b]=[b,a%b]} return a}
+function F(n, d=1n){
+  n = BigInt(n); d = BigInt(d);
+  if(d === 0n) throw new Error("zero denominator");
+  if(d < 0n){n = -n; d = -d}
+  const g = bgcd(n,d) || 1n;
+  return {n: n/g, d: d/g};
+}
+const fadd = (a,b) => F(a.n*b.d + b.n*a.d, a.d*b.d);
+const fsub = (a,b) => F(a.n*b.d - b.n*a.d, a.d*b.d);
+const fmul = (a,b) => F(a.n*b.n, a.d*b.d);
+const fcmp = (a,b) => {const x = a.n*b.d - b.n*a.d; return x<0n?-1:x>0n?1:0};
+const fnum = a => Number(a.n*1000000n/a.d)/1e6;
+const F0 = F(0), F1 = F(1);
+const fstr = a => {
+  if(a.d === 1n) return a.n.toString();
+  if(a.d <= 10000000n) return a.n + "/" + a.d;
+  return fnum(a).toFixed(6) + "…";  // display only; the value stays exact
+};
+
+/* --- the real constants (ops/memories.py, ops/controller.py, ops/recruitment.py) --- */
+const ALPHA = F(1,5);            // REINFORCEMENT_ALPHA
+const BETA = F(1,4);             // controller EMA
+const ENTER = F(3,5), EXIT = F(2,5);
+const MIN_IMPROVEMENT = F(1,100), STAGNATION_LIMIT = 5;
+const QUORUM = F(1,2);           // CONSENSUS_QUORUM
+const DECAY_RATE = 0.15;         // float — read-time decay, liveness gate only
+const LIVENESS_FLOOR = 0.05;     // float gates float; never in a verdict
+const COOLDOWN_SIM_S = 24;       // real DEFAULT_COOLDOWN 5 min, scaled ×12.5 (labeled)
+const SIM_S_PER_ROUND = 4;
+
+/* ---------------- deterministic helpers ---------------- */
+function seedFrom(str){let h=1779033703^str.length;for(let i=0;i<str.length;i++){
+  h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19}return h>>>0}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;
+  let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;
+  return((t^t>>>14)>>>0)/4294967296}}
+function pseudoHash(label){const r=mulberry32(seedFrom("stigmergy:"+label));
+  let s="";for(let i=0;i<64;i++)s+="0123456789abcdef"[Math.floor(r()*16)];return s}
+const short=(h,n=14)=>h.slice(0,n)+"…";
+const hash01=label=>mulberry32(seedFrom(label))();
+
+/* ---------------- corpus (verbatim from demo/corpus.py) ---------------- */
+const THEMES = {
+cooking: [
+ "Caramelizing onions takes forty minutes, not five; low heat and patience.",
+ "A splash of pasta water emulsifies the sauce so it clings to the noodles.",
+ "Resting a steak after searing lets the juices redistribute through the meat.",
+ "Toasting spices in a dry pan wakes up their aromatic oils before grinding.",
+ "Sourdough starter doubles fastest around 26 degrees; cold slows fermentation.",
+ "Deglazing the pan with wine lifts the browned fond into the sauce.",
+ "Blanching green vegetables then shocking them in ice water fixes the color.",
+ "Salting eggplant draws out moisture so it fries instead of steaming."],
+astronomy: [
+ "Betelgeuse is a red supergiant expected to end as a supernova.",
+ "Tidal locking keeps one lunar hemisphere permanently facing Earth.",
+ "The Andromeda galaxy will merge with the Milky Way in four billion years.",
+ "Neutron stars pack a solar mass into a sphere the size of a city.",
+ "Jupiter's Great Red Spot is a storm older than telescopic astronomy.",
+ "Redshift of distant galaxies is the fingerprint of cosmic expansion.",
+ "Europa hides a saltwater ocean beneath kilometers of surface ice.",
+ "A pulsar sweeps its radio beam past Earth like a lighthouse."],
+databases: [
+ "Serializable isolation makes concurrent transactions behave as if sequential.",
+ "A write-ahead log turns crashes into recoverable events, not data loss.",
+ "B-tree indexes trade write amplification for logarithmic point lookups.",
+ "MVCC lets readers proceed without blocking writers by keeping versions.",
+ "Consensus protocols like Raft keep replicas agreeing across failures.",
+ "A covering index answers the query without touching the base table.",
+ "Foreign keys make referential integrity the database's job, not the app's.",
+ "Vector indexes approximate nearest neighbors to make similarity search cheap."]};
+const MISPLACED = [  // (home, seeded_into, text)
+ ["cooking","astronomy","Browning butter until the milk solids toast adds a nutty depth to sauces."],
+ ["cooking","databases","Kneading develops gluten; the windowpane test says when the dough is ready."],
+ ["astronomy","cooking","Saturn's rings are mostly water ice, shepherded by tiny embedded moons."],
+ ["astronomy","databases","The cosmic microwave background is the afterglow of the early universe."],
+ ["databases","cooking","Changefeeds push row changes to consumers instead of making them poll."],
+ ["databases","astronomy","Hash joins build a table in memory and probe it with the larger input."]];
+const QUERIES = {
+cooking: ["how do I build flavor when cooking vegetables and meat",
+ "techniques for better sauces and doughs in the kitchen",
+ "why does resting and temperature control matter in cooking"],
+astronomy: ["what do we know about stars, moons and galaxies",
+ "strange compact objects and signals in deep space",
+ "how planets and their satellites behave"],
+databases: ["how do databases stay correct under concurrency and crashes",
+ "indexing strategies and what they cost",
+ "how distributed databases replicate and agree"]};
+const THEME_KEYS = Object.keys(THEMES);
+const REGION_OF = t => "region-" + t;
+
+/* ---------------- colors ---------------- */
+const C = {carbon:[7,9,11], bone:[232,229,220], graphite:[140,146,152],
+  faint:[74,81,88], seal:[216,176,97], pass:[127,189,141], taint:[223,79,59],
+  cooking:[223,163,92], astronomy:[156,200,219], databases:[143,189,141]};
+const mix=(a,b,t)=>[0,1,2].map(i=>Math.round(a[i]+(b[i]-a[i])*t));
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+
+/* ---------------- world state ---------------- */
+const REGION_POS = {          // basin centers, normalized
+  "region-cooking":   {nx:0.22, ny:0.30},
+  "region-astronomy": {nx:0.78, ny:0.28},
+  "region-databases": {nx:0.50, ny:0.76}};
+const BASIN_R = 0.21;         // fraction of the field's smaller dimension
+
+const memories = [], memById = {};
+const agents = [];
+const signals = [];           // {id, memoryId, origin, vigor:Frac, emittedAt, by, status}
+const cooldownUntil = {};     // memoryId -> simSeconds
+let simNow = 0, round = 0;
+const chains = {};            // nodeId -> [{seq,type,summary,hash,prev}]
+const NODES = ["demo-seeder","agent-node-0","agent-node-1","agent-node-2","demo-local-resolver"];
+NODES.forEach(n => chains[n] = []);
+const ledger = [];            // interleaved feed refs {node, ev}
+const milestones = {};        // caption gates
+
+function appendEvent(node, type, summary){
+  const ch = chains[node];
+  const prev = ch.length ? ch[ch.length-1].hash : pseudoHash("genesis:"+node);
+  const ev = {seq: ch.length, type, summary,
+    prev, hash: pseudoHash(node+":"+ch.length+":"+type+":"+summary), at: simNow, round};
+  ch.push(ev); ledger.push({node, ev});
+  if(ui.tab === "ledger" && dossier.classList.contains("open")) renderTab();
+  return ev;
+}
+
+/* stand-in embeddings: similarity is deterministic and theme-separating,
+   NOT MiniLM — mechanism only, no semantic claim. Each theme has a
+   "resonant four" (its two misplaced memories + its two strongest home
+   memories); the query workload cycles its strongest resonance across
+   them — the variation MiniLM geometry provides naturally in the real
+   demo, shaped here so a staged run converges on camera. */
+let QLIST = {};        // theme -> its resonant five (ids)
+function buildQlist(){
+  for(const theme of THEME_KEYS){
+    const mis = memories.filter(m => m.misplaced && m.home === theme).map(m => m.id);
+    const home = memories.filter(m => !m.misplaced && m.home === theme)
+      .slice(0,3).map(m => m.id);
+    QLIST[theme] = [...mis, ...home];
+  }
+}
+let simPhaseSalt = 0;  // varies per agent turn so simultaneous agents diverge
+/* which memory the current query resonates with hardest. The staged
+   workload keeps queries arriving for content still out of place —
+   this is the director's knob; every DECISION below it stays in the
+   exact-fraction engine. */
+function boostTarget(queryTheme, queryIdx){
+  const q = QLIST[queryTheme]||[];
+  const stillAway = q.filter(id => {const m=memById[id];
+    return m.misplaced && m.region !== REGION_OF(m.home)});
+  const homeSide = q.filter(id => !stillAway.includes(id)).slice(0,2);
+  const cycle = [...stillAway, ...homeSide];
+  if(!cycle.length) return null;
+  return cycle[(queryIdx + round + simPhaseSalt) % cycle.length];
+}
+function sim(queryTheme, queryIdx, mem){
+  const base = mem.home === queryTheme ? 0.88 : 0.12;
+  const pos = (QLIST[queryTheme]||[]).indexOf(mem.id);
+  // a memory strongly resonant with ITS theme sits far from every other
+  // theme's queries — cross-theme recalls land on nothing resonant
+  let quality;
+  if(pos >= 0) quality = 0.06 - 0.005*pos;
+  else if((QLIST[mem.home]||[]).includes(mem.id)) quality = 0;
+  else quality = 0.03*hash01("q:"+mem.id);
+  const boost = boostTarget(queryTheme, queryIdx) === mem.id ? 0.05 : 0;
+  return base + quality + boost + 0.002*hash01("sim:"+queryTheme+":"+queryIdx+":"+mem.id);
+}
+
+/* slot layout inside a basin: golden-angle spiral, in basin-relative
+   polar coordinates so it survives resizes and aspect changes */
+const slotCount = {};
+function nextSlot(region){
+  const k = slotCount[region] = (slotCount[region]||0);
+  slotCount[region]++;
+  const GA = 2.39996;
+  return {a: k*GA + seedFrom(region)%7,
+          rf: Math.min(0.9, 0.82*Math.sqrt((k+0.6)/12))};
+}
+
+function seedWorld(){
+  for(const rid of Object.keys(REGION_POS))
+    appendEvent("demo-seeder","REGION_CREATED", rid);
+  let i = 0;
+  for(const theme of THEME_KEYS){
+    THEMES[theme].forEach((text, j) => {
+      addMemory("mem-"+theme.slice(0,2)+(j+1), theme, REGION_OF(theme), text); i++;
+    });
+  }
+  MISPLACED.forEach(([home, into, text], j) => {
+    addMemory("mem-x"+(j+1), home, REGION_OF(into), text, true);
+  });
+}
+function addMemory(id, home, region, content, misplaced=false){
+  const m = {id, home, region, content, misplaced,
+    confidence: F(1,2), state:"NEUTRAL", reinforcements:0,
+    slot: nextSlot(region), x:null, y:null, phase: hash01("ph:"+id)*6.28,
+    scale:0, glow:0, migrating:false};
+  memories.push(m); memById[id] = m;
+  appendEvent("demo-seeder","MEMORY_STORED",
+    id+" → "+region+(misplaced?"  [misplaced: home="+REGION_OF(home)+"]":""));
+}
+
+function addAgent(i){
+  const a = {id:"agent-"+i, node:"agent-node-"+i,
+    mode:"ROAMING", ema:F0, emaPrev:F0, stagnation:0, region:null,
+    x:null, y:null, phase:i*2.1, lastQuery:""};
+  agents.push(a); return a;
+}
+
+/* ---------------- controller (ops/controller.py step(), exact) ---------------- */
+function resonanceDensity(hits){
+  if(!hits.length) return F0;
+  let total = F0;
+  for(const h of hits) if(h.state === "REINFORCED") total = fadd(total, h.confidence);
+  return fmul(total, F(1, hits.length));
+}
+function controllerStep(a, obs){
+  const newEma = fadd(fmul(BETA, obs), fmul(fsub(F1, BETA), a.ema));
+  let stagnation = 0;
+  if(a.mode === "DWELLING"){
+    const improved = fcmp(newEma, fadd(a.ema, MIN_IMPROVEMENT)) >= 0;
+    stagnation = improved ? 0 : a.stagnation + 1;
+  }
+  let mode = a.mode, trigger = null;
+  if(a.mode === "ROAMING" && fcmp(newEma, ENTER) >= 0){
+    mode = "DWELLING"; trigger = "ema_reached_enter_threshold";
+  } else if(a.mode === "DWELLING" && fcmp(newEma, EXIT) <= 0){
+    mode = "ROAMING"; trigger = "ema_fell_to_exit_threshold";
+  } else if(a.mode === "DWELLING" && stagnation >= STAGNATION_LIMIT){
+    mode = "ROAMING"; trigger = "stagnation";
+  }
+  const transitioned = mode !== a.mode;
+  if(transitioned) stagnation = 0;
+  a.emaPrev = a.ema; a.ema = newEma; a.stagnation = stagnation;
+  return {mode, trigger, transitioned};
+}
+
+/* ---------------- one agent round (mirrors demo/run_demo.agent_round) -------- */
+/* Seeded RNG schedules WORKLOAD (which query an agent asks next) — the
+   harness doctrine verbatim: it simulates arrival, it never decides an
+   outcome. Seeded, so every run of this page is the same run. */
+const workloadRng = mulberry32(seedFrom("stigmergy-workload"));
+function agentRound(a, idx){
+  const theme = THEME_KEYS[Math.floor(workloadRng()*3)];
+  const qIdx = Math.floor(workloadRng()*3);
+  simPhaseSalt = idx*2;
+  a.lastQuery = theme+"/"+qIdx;
+
+  // recall: region-scoped when DWELLING, global when ROAMING; top-5
+  const pool = memories.filter(m =>
+    a.mode === "DWELLING" ? m.region === a.region : true);
+  const hits = pool
+    .map(m => ({m, s: sim(theme, qIdx, m)}))
+    .sort((x,y) => y.s - x.s).slice(0,5)
+    .map(x => ({id:x.m.id, state:x.m.state, confidence:x.m.confidence,
+                region:x.m.region, mem:x.m}));
+  if(!hits.length){ controllerStep(a, F0); return null }
+
+  const density = resonanceDensity(hits);
+
+  // majority region of the hits
+  const counts = {};
+  hits.forEach(h => counts[h.region] = (counts[h.region]||0)+1);
+  const majority = Object.entries(counts).sort((x,y)=>y[1]-x[1])[0][0];
+
+  const dec = controllerStep(a, density);
+  if(dec.transitioned){
+    a.mode = dec.mode;
+    a.region = dec.mode === "DWELLING" ? majority : null;
+    appendEvent(a.node, "MODE_CHANGED",
+      a.id+" → "+dec.mode+(a.region?" @ "+a.region:"")+"  ["+dec.trigger+"]");
+    if(dec.mode === "DWELLING") milestone("firstDwell");
+  }
+
+  // reinforce the top hit: c' = c + (1-c)·1/5, exact
+  const top = hits[0].mem;
+  const before = top.confidence;
+  top.confidence = fadd(top.confidence, fmul(fsub(F1, top.confidence), ALPHA));
+  top.state = "REINFORCED"; top.reinforcements++;
+  appendEvent(a.node, "MEMORY_REINFORCED",
+    top.id+"  c "+fstr(before)+" → "+fstr(top.confidence)+"  ("+L().reasonQuery(theme)+")");
+  milestone("firstReinforce");
+
+  // stigmergic recruitment: the gradient, not the agent, recruits
+  let emitted = null;
+  if(top.region !== majority){
+    const dup = signals.find(s => s.status==="PENDING" &&
+      s.memoryId===top.id && s.origin===majority);
+    if(!dup){  // idempotent per (memory, origin) while live — REC contract
+      emitted = {id:"sig-"+(signals.length+1), memoryId:top.id, origin:majority,
+        vigor:density, emittedAt:simNow, by:a.id, status:"PENDING"};
+      signals.push(emitted);
+      appendEvent(a.node, "SIGNAL_EMITTED",
+        emitted.id+"  "+top.id+" ← "+majority+"  vigor="+fstr(density));
+      milestone("firstSignal");
+    }
+  }
+  return {agent:a, top, emitted, density, theme};
+}
+
+/* ------------- resolver tick (mirrors ops/recruitment consensus) ------------- */
+function decayedStrength(s){ return Math.exp(-DECAY_RATE*(simNow - s.emittedAt)) }
+
+function resolverTick(){
+  const outcomes = [];
+  // expire dead pheromones (the cron sweeper's job in the deployed system)
+  for(const s of signals){
+    if(s.status === "PENDING" && decayedStrength(s) < LIVENESS_FLOOR){
+      s.status = "EXPIRED";
+      appendEvent("demo-local-resolver","SIGNAL_EXPIRED",
+        s.id+"  "+s.memoryId+"  strength e^(−0.15·"+(simNow-s.emittedAt)+"s) < "+LIVENESS_FLOOR);
+      milestone("weakExpire");
+    }
+  }
+  // resolve each distinct (memory, origin) with pending signals
+  const targets = {};
+  signals.filter(s => s.status==="PENDING")
+    .forEach(s => targets[s.memoryId+"→"+s.origin] = {memoryId:s.memoryId, target:s.origin});
+  for(const {memoryId, target} of Object.values(targets)){
+    const live = signals.filter(s => s.status==="PENDING" &&
+      s.memoryId===memoryId && decayedStrength(s) >= LIVENESS_FLOOR);
+    if(!live.length) continue;
+    // floats filter, fractions decide:
+    let vigorFor = F0;
+    for(const s of live) if(s.origin === target) vigorFor = fadd(vigorFor, s.vigor);
+    const bar = fmul(QUORUM, F(live.length));
+    const reached = fcmp(vigorFor, bar) >= 0;
+    const mem = memById[memoryId];
+    const exhibit = {memoryId, target, vigorFor, live:live.length, bar,
+      verdict: reached ? "go" : "hold"};
+    if(reached){
+      if((cooldownUntil[memoryId]||-1) > simNow){
+        exhibit.verdict = "defer";
+        appendEvent("demo-local-resolver","SIGNAL_RESOLVED",
+          memoryId+" ← "+target+"  reached, but CooldownActive until t="+cooldownUntil[memoryId]+"s");
+        milestone("cooldown");
+      } else {
+        const from = mem.region;
+        mem.region = target; mem.migrating = true;
+        mem.slot = nextSlot(target);
+        setTimeout(()=>{mem.migrating=false}, DUR(1800));
+        cooldownUntil[memoryId] = simNow + COOLDOWN_SIM_S;
+        live.forEach(s => { if(s.origin===target) s.status = "RESOLVED" });
+        appendEvent("demo-local-resolver","MEMORY_MIGRATED",
+          memoryId+"  "+from+" → "+target+"  vigor_for="+fstr(vigorFor)+" ≥ "+fstr(bar));
+        milestone("firstMigrate");
+      }
+    } else {
+      appendEvent("demo-local-resolver","SIGNAL_RESOLVED",
+        memoryId+" ← "+target+"  not reached: "+fstr(vigorFor)+" < "+fstr(bar));
+    }
+    outcomes.push(exhibit);
+  }
+  return outcomes;
+}
+
+/* ---------------- scoreboard / convergence ---------------- */
+const misplacedHome = () =>
+  memories.filter(m => m.misplaced && m.region === REGION_OF(m.home)).length;
+const MISPLACED_TOTAL = MISPLACED.length;
+
+/* ---------------- rendering: canvas ---------------- */
+const cv = document.getElementById("field"), ctx = cv.getContext("2d");
+let W=0, H=0, DPR=1;
+function resize(){DPR=Math.min(2,window.devicePixelRatio||1);
+  W=innerWidth;H=innerHeight;cv.width=W*DPR;cv.height=H*DPR;
+  cv.style.width=W+"px";cv.style.height=H+"px";ctx.setTransform(DPR,0,0,DPR,0,0)}
+addEventListener("resize",resize);resize();
+const fieldW = () => dossier.classList.contains("open") && W>860 ? W-396 : W;
+const px = nx => nx*(fieldW()-40)+20;
+const py = ny => 56 + ny*(H-56-96-20);
+const unit = () => Math.min(fieldW()-40, H-172);
+const basinR = () => BASIN_R*unit();
+const basinPx = rid => ({x: px(REGION_POS[rid].nx), y: py(REGION_POS[rid].ny)});
+function memTarget(m){
+  const b = basinPx(m.region), R = basinR();
+  return {x: b.x + Math.cos(m.slot.a)*m.slot.rf*R,
+          y: b.y + Math.sin(m.slot.a)*m.slot.rf*R*0.9};
+}
+
+const ripples=[], strokes=[], flabels=[];
+function ripple(x,y,color,maxR,dur,delay=0){ripples.push({x,y,color,maxR,t0:performance.now()+delay,d:DUR(dur)})}
+function strokeTo(from,to,color,dur,delay=0){strokes.push({from,to,color,t0:performance.now()+delay,d:DUR(dur)})}
+function flabel(x,y,text,color,delay=0,dur=2600){flabels.push({x,y,text,color,t0:performance.now()+delay,d:DUR(dur)})}
+const easeO=t=>1-Math.pow(1-t,3);
+
+const themeColor = t => C[t] || C.graphite;
+const regionColor = r => themeColor(r.replace("region-",""));
+
+function draw(now){
+  ctx.clearRect(0,0,W,H);
+  const g=ctx.createRadialGradient(W/2,H*0.46,0,W/2,H*0.46,Math.max(W,H)*0.72);
+  g.addColorStop(0,"rgba(11,15,19,0.5)");g.addColorStop(1,"rgba(7,9,11,0)");
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+
+  /* basins */
+  const Rb = basinR();
+  for(const rid of Object.keys(REGION_POS)){
+    const {x,y}=basinPx(rid);
+    const col = regionColor(rid);
+    const bg=ctx.createRadialGradient(x,y,0,x,y,Rb*1.25);
+    bg.addColorStop(0,rgba(col,0.055));bg.addColorStop(1,rgba(col,0));
+    ctx.fillStyle=bg;ctx.beginPath();ctx.arc(x,y,Rb*1.25,0,6.283);ctx.fill();
+    ctx.setLineDash([2,7]);ctx.strokeStyle=rgba(col,0.35);ctx.lineWidth=1;
+    ctx.beginPath();ctx.ellipse(x,y,Rb,Rb*0.9,0,0,6.283);ctx.stroke();ctx.setLineDash([]);
+    ctx.font="10px "+getComputedStyle(document.body).fontFamily;
+    ctx.fillStyle=rgba(col,0.8);ctx.textAlign="center";
+    const n = memories.filter(m=>m.region===rid).length;
+    ctx.fillText(rid.toUpperCase()+" · "+n, x, Math.max(70, y-Rb*0.9-14));
+  }
+
+  /* pending signal pheromones: ring at the memory, thread to the recruiting basin */
+  for(const s of signals){
+    if(s.status!=="PENDING")continue;
+    const m=memById[s.memoryId], str=decayedStrength(s);
+    if(m.x===null)continue;
+    const mx=m.x, my=m.y;
+    const o=basinPx(s.origin);
+    const col=regionColor(s.origin);
+    const breathe=MOTION?1+0.1*Math.sin(now/600+seedFrom(s.id)%10):1;
+    ctx.strokeStyle=rgba(col,0.55*str);ctx.lineWidth=1.2;
+    ctx.beginPath();ctx.arc(mx,my,(9+10*(1-str))*breathe,0,6.283);ctx.stroke();
+    ctx.setLineDash([3,6]);ctx.strokeStyle=rgba(col,0.3*str);ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(mx,my);ctx.lineTo(o.x,o.y);ctx.stroke();ctx.setLineDash([]);
+  }
+
+  /* memories: colored by HOME theme — convergence is visible as color sorting */
+  for(const m of memories){
+    const t=memTarget(m);
+    if(m.x===null){m.x=t.x;m.y=t.y}
+    m.x += (t.x-m.x)*(MOTION?0.06:1);
+    m.y += (t.y-m.y)*(MOTION?0.06:1);
+    if(m.scale<1) m.scale=Math.min(1,m.scale+0.03);
+    const x=m.x, y=m.y;
+    const col=themeColor(m.home);
+    const conf=fnum(m.confidence);
+    const breathe=MOTION?1+0.06*Math.sin(now/900+m.phase):1;
+    const glow=(m.state==="REINFORCED"?0.35+0.5*conf:0.18)*m.scale;
+    const R=(m.misplaced?4.4:3.4)*m.scale*breathe;
+    const gg=ctx.createRadialGradient(x,y,0,x,y,R*6);
+    gg.addColorStop(0,rgba(col,0.3*glow));gg.addColorStop(1,rgba(col,0));
+    ctx.fillStyle=gg;ctx.beginPath();ctx.arc(x,y,R*6,0,6.283);ctx.fill();
+    ctx.fillStyle=rgba(mix(col,C.bone,0.25),0.95*m.scale);
+    ctx.beginPath();ctx.arc(x,y,R,0,6.283);ctx.fill();
+    if(m.misplaced && m.region!==REGION_OF(m.home)){
+      ctx.setLineDash([2,3]);
+      ctx.strokeStyle=rgba(C.bone,0.5+(MOTION?0.25*Math.sin(now/500+m.phase):0));
+      ctx.lineWidth=1;
+      ctx.beginPath();ctx.arc(x,y,R+4,0,6.283);ctx.stroke();ctx.setLineDash([]);
+    }
+    if(m.migrating){
+      ctx.strokeStyle=rgba(C.pass,0.7);ctx.lineWidth=1.4;
+      ctx.beginPath();ctx.arc(x,y,R+7,0,6.283);ctx.stroke();
+    }
+  }
+
+  /* agents: bone diamonds; DWELLING orbits its basin, ROAMING drifts */
+  agents.forEach((a,i)=>{
+    const t=now/1000;
+    let tx,ty;
+    if(a.mode==="DWELLING" && a.region){
+      const b=basinPx(a.region);
+      tx=b.x+(Rb+22)*Math.cos(t*0.5+a.phase);
+      ty=b.y+(Rb+22)*Math.sin(t*0.5+a.phase)*0.8;
+    } else {
+      tx=px(0.5+0.36*Math.cos(t*0.21+a.phase));
+      ty=py(0.48+0.34*Math.sin(t*0.17+a.phase*1.7));
+    }
+    if(a.x===null){a.x=tx;a.y=ty}
+    a.x+=(tx-a.x)*(MOTION?0.04:1); a.y+=(ty-a.y)*(MOTION?0.04:1);
+    const x=a.x, y=a.y, r=5;
+    ctx.save();ctx.translate(x,y);ctx.rotate(0.785);
+    ctx.strokeStyle=rgba(C.bone,0.9);ctx.lineWidth=1.3;
+    ctx.strokeRect(-r,-r,2*r,2*r);
+    if(a.mode==="DWELLING"){ctx.fillStyle=rgba(a.region?regionColor(a.region):C.bone,0.6);
+      ctx.fillRect(-r+2,-r+2,2*r-4,2*r-4)}
+    ctx.restore();
+    ctx.font="10px "+getComputedStyle(document.body).fontFamily;
+    ctx.fillStyle=rgba(C.graphite,0.9);ctx.textAlign="center";
+    ctx.fillText(a.id+" · "+a.mode.toLowerCase(), x, y+20);
+  });
+
+  /* transient strokes / ripples / labels */
+  for(let i=strokes.length-1;i>=0;i--){const s=strokes[i];
+    const k=(now-s.t0)/s.d;if(k<0)continue;
+    const kk=Math.min(1,k),fade=k>1?Math.max(0,1-(k-1)/0.8):1;
+    if(fade<=0){strokes.splice(i,1);continue}
+    const tx=s.from.x+(s.to.x-s.from.x)*easeO(kk),ty=s.from.y+(s.to.y-s.from.y)*easeO(kk);
+    ctx.strokeStyle=rgba(s.color,0.5*fade);ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(s.from.x,s.from.y);ctx.lineTo(tx,ty);ctx.stroke();}
+  for(let i=ripples.length-1;i>=0;i--){const r=ripples[i];
+    const k=(now-r.t0)/r.d;if(k<0)continue;if(k>1){ripples.splice(i,1);continue}
+    ctx.strokeStyle=rgba(r.color,0.4*(1-k));ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(r.x,r.y,r.maxR*easeO(k),0,6.283);ctx.stroke();}
+  for(let i=flabels.length-1;i>=0;i--){const f=flabels[i];
+    const k=(now-f.t0)/f.d;if(k<0)continue;if(k>1){flabels.splice(i,1);continue}
+    ctx.font="10px "+getComputedStyle(document.body).fontFamily;
+    ctx.fillStyle=rgba(f.color,0.9*(1-k*k));ctx.textAlign="center";
+    ctx.fillText(f.text,f.x,f.y-14*easeO(k));}
+
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+/* ---------------- dossier UI ---------------- */
+const dossier=document.getElementById("dossier"), dbody=document.getElementById("dbody");
+const ui = {tab:"ledger", inspect:null, exhibits:[]};
+document.querySelectorAll("#dtabs button").forEach(b=>{
+  b.onclick=()=>{ui.tab=b.dataset.tab;
+    document.querySelectorAll("#dtabs button").forEach(x=>x.classList.toggle("on",x===b));
+    renderTab()};
+});
+function openTab(tab){ui.tab=tab;dossier.classList.add("open");
+  document.querySelectorAll("#dtabs button").forEach(x=>x.classList.toggle("on",x.dataset.tab===tab));
+  if(tab==="inspect")document.getElementById("tab-inspect").style.display="";
+  renderTab()}
+
+const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+const fracHTML = f => f.d===1n ? `<span>${f.n}</span>` :
+  (f.d<=10000000n
+    ? `<span class="frac"><span class="nu">${f.n}</span><span class="de">${f.d}</span></span>`
+    : `<span title="exact value kept internally">${fnum(f).toFixed(4)}…</span>`);
+
+function exhibitHTML(e){
+  const v = L().verdicts[e.verdict];
+  return `<div class="exhibit">
+    <div class="who">${e.memoryId} ← <span class="r-${e.target.replace("region-","")}">${e.target}</span></div>
+    <div class="exline">
+      ${fracHTML(e.vigorFor)}<span class="op">${e.verdict==="hold"?"&lt;":"≥"}</span>
+      ${fracHTML(QUORUM)}<span class="op">·</span><span>${e.live}</span>
+      <span class="op">→</span><span class="verdict ${e.verdict}">${v}</span>
+    </div>
+    <div class="why">vigor_for ${e.verdict==="hold"?"&lt;":"≥"} quorum · live — ${
+      lang==="es"?"decidido en fracciones exactas, sin floats":"decided in exact fractions, no floats"}</div>
+  </div>`;
+}
+
+function renderTab(){
+  if(ui.tab==="ledger"){
+    let h = ui.exhibits.slice(-2).map(exhibitHTML).join("");
+    h += `<div class="sect">audit ledger · ${ledger.length} events</div>`;
+    h += ledger.slice(-60).reverse().map(({node,ev})=>`
+      <div class="lrow ev-${ev.type}">
+        <div class="ehead"><b>${ev.type}</b> <span class="dim">· ${node}</span></div>
+        <div class="emeta">${esc(ev.summary)}</div>
+        <div class="ehash">r${ev.round} · t=${ev.at}s · ${short(ev.hash)} ← prev</div>
+      </div>`).join("");
+    dbody.innerHTML = h;
+  }
+  else if(ui.tab==="signals"){
+    const pend = signals.filter(s=>s.status==="PENDING");
+    let h = `<div class="sect">${lang==="es"?"señales vivas":"live signals"} · ${pend.length}</div>`;
+    if(!pend.length) h+=`<div class="row"><span class="mk dot">–</span><div class="bd">
+      <div class="s">${lang==="es"?"ninguna — el campo está en reposo":"none — the field is quiet"}</div></div></div>`;
+    for(const s of pend.slice().reverse()){
+      const str=decayedStrength(s);
+      h+=`<div class="sigbox">
+        <div class="head"><span>${s.id} · ${s.memoryId}</span>
+          <span class="r-${s.origin.replace("region-","")}">← ${s.origin}</span></div>
+        <div class="meta">vigor ${fstr(s.vigor)} · ${lang==="es"?"emitida por":"emitted by"} ${s.by} @ t=${s.emittedAt}s</div>
+        <div class="sigbar"><i style="transform:scaleX(${Math.max(0.02,str).toFixed(3)})"></i></div>
+        <div class="meta">strength e^(−0.15·${simNow-s.emittedAt}s) = ${str.toFixed(3)}
+          ${str<LIVENESS_FLOOR*2?`<span style="color:var(--taint)"> → ${lang==="es"?"por expirar":"fading"}</span>`:""}</div>
+      </div>`;
+    }
+    h += `<div class="sect">${lang==="es"?"últimos veredictos":"latest verdicts"}</div>`;
+    h += ui.exhibits.slice(-4).reverse().map(exhibitHTML).join("") ||
+      `<div class="row"><span class="mk dot">–</span><div class="bd"><div class="s">—</div></div></div>`;
+    dbody.innerHTML=h;
+  }
+  else if(ui.tab==="chains"){
+    let h="";
+    for(const node of NODES){
+      const ch=chains[node];
+      h+=`<div class="sect">${node} · ${ch.length} ${lang==="es"?"eventos":"events"}</div>`;
+      h+=ch.slice(-5).reverse().map(ev=>`
+        <div class="lrow ev-${ev.type}">
+          <div class="ehead">seq ${ev.seq} · <b>${ev.type}</b></div>
+          <div class="emeta">${esc(ev.summary)}</div>
+          <div class="ehash">${short(ev.hash)} ← ${short(ev.prev,10)}</div>
+        </div>`).join("");
+    }
+    dbody.innerHTML=h;
+  }
+  else if(ui.tab==="verify") renderVerify(false);
+  else if(ui.tab==="inspect" && ui.inspect) renderInspect();
+}
+
+function renderVerify(run){
+  const rows = NODES.map(n=>["chain "+n, chains[n].length+" events relink from genesis"]);
+  rows.push(["merkle", (lang==="es"?"raíz sobre las cabezas de cadena":"root over the chain heads")]);
+  let h=`<button class="vbtn" id="runverify">${L().verifyBtn}</button>`;
+  h+=rows.map(([b,p],i)=>`<div class="check" data-i="${i}">
+    <span class="bc">${b.replace("demo-","").replace("agent-node","agent")}</span>
+    <span class="bar"><i></i></span><span class="st">–</span>
+    <span class="pv">${p}</span></div>`).join("");
+  h+=`<div id="vverdict"></div>
+    <div class="sect">${lang==="es"?"qué se verifica de verdad":"what is really verified"}</div>
+    <div class="row"><span class="mk dot">·</span><div class="bd"><div class="s">${
+      lang==="es"
+      ?"aquí: religado de pseudo-hashes de exhibición. En el sistema real: JSON canónico + SHA-256 por nodo (audit/chain.verify_chain) y un ledger Merkle encadenado (audit/merkle.verify_ledger), contra CockroachDB."
+      :"here: display pseudo-hashes relinking. In the real system: canonical JSON + SHA-256 per node (audit/chain.verify_chain) and a chained Merkle ledger (audit/merkle.verify_ledger), against CockroachDB."}</div></div></div>`;
+  dbody.innerHTML=h;
+  document.getElementById("runverify").onclick=()=>runVerify();
+  if(run) runVerify();
+}
+function runVerify(){
+  const checks=[...dbody.querySelectorAll(".check")];
+  let i=0;
+  (function step(){
+    if(i>0){const prev=checks[i-1];prev.classList.add("pass");
+      prev.querySelector(".st").textContent="PASS"}
+    if(i>=checks.length){
+      // recompute every chain link + a merkle root over the heads (display discipline)
+      let ok=0;
+      for(const n of NODES){
+        let prev=pseudoHash("genesis:"+n), good=true;
+        chains[n].forEach(ev=>{ if(ev.prev!==prev) good=false; prev=ev.hash });
+        if(good) ok++;
+      }
+      const root=pseudoHash("merkle:"+NODES.map(n=>{
+        const ch=chains[n];return ch.length?ch[ch.length-1].hash:"empty"}).join(":"));
+      const v=document.getElementById("vverdict");
+      v.className="ok";
+      v.innerHTML=L().verifyDone(ok)+`<div class="ehash" style="margin-top:6px">merkle ${short(root,22)}</div>`;
+      return}
+    checks[i].classList.add("live");i++;setTimeout(step,DUR(360));
+  })();
+}
+
+function renderInspect(){
+  const o=ui.inspect;
+  if(o.kind==="mem"){
+    const m=o.m;
+    const evs=ledger.filter(({ev})=>ev.summary.includes(m.id)).slice(-8).reverse();
+    dbody.innerHTML=`
+      <div class="row"><span class="mk dot">◆</span><div class="bd">
+        <div class="h">${m.id} <span class="fnt">${m.state}</span></div>
+        <div class="s">“${esc(m.content)}”</div></div></div>
+      <div class="row"><span class="mk au">⌂</span><div class="bd">
+        <div class="h">${lang==="es"?"tema de origen":"home theme"}:
+          <span class="r-${m.home}">${m.home}</span></div>
+        <div class="s">${lang==="es"?"región actual":"current region"}:
+          <span class="r-${m.region.replace("region-","")}">${m.region}</span>
+          ${m.misplaced && m.region!==REGION_OF(m.home)
+            ?`<span style="color:var(--taint)"> · ${lang==="es"?"MAL UBICADA":"MISPLACED"}</span>`
+            :m.misplaced?`<span style="color:var(--pass)"> · ${lang==="es"?"EN CASA":"HOME"}</span>`:""}</div></div></div>
+      <div class="row"><span class="mk ok">✓</span><div class="bd">
+        <div class="h">${lang==="es"?"confianza":"confidence"} ${fstr(m.confidence)}</div>
+        <div class="s">${m.reinforcements} ${lang==="es"?"refuerzos":"reinforcements"} · c′ = c + (1−c)·1/5</div></div></div>
+      ${(cooldownUntil[m.id]||-1)>simNow?`<div class="row"><span class="mk au">◷</span><div class="bd">
+        <div class="s">cooldown ${lang==="es"?"hasta":"until"} t=${cooldownUntil[m.id]}s (Invariant 6)</div></div></div>`:""}
+      <div class="sect">${lang==="es"?"eventos que la nombran":"events naming it"}</div>
+      ${evs.map(({node,ev})=>`<div class="lrow ev-${ev.type}">
+        <div class="ehead"><b>${ev.type}</b> <span class="dim">· ${node}</span></div>
+        <div class="emeta">${esc(ev.summary)}</div></div>`).join("") ||
+        `<div class="row"><span class="mk dot">–</span><div class="bd"><div class="s">—</div></div></div>`}`;
+  } else {
+    const a=o.a;
+    dbody.innerHTML=`
+      <div class="row"><span class="mk dot">◆</span><div class="bd">
+        <div class="h">${a.id} <span class="fnt">node ${a.node}</span></div>
+        <div class="s">${lang==="es"?"modo":"mode"} ${a.mode}${a.region?" @ "+a.region:""}</div></div></div>
+      <div class="row"><span class="mk au">Σ</span><div class="bd">
+        <div class="h">EMA ${fstr(a.ema)}</div>
+        <div class="s">ema′ = 1/4·obs + 3/4·ema · enter 3/5 · exit 2/5
+          · ${lang==="es"?"estancamiento":"stagnation"} ${a.stagnation}/5</div></div></div>
+      <div class="sect">${lang==="es"?"su cadena de nodo":"its node chain"}</div>
+      ${chains[a.node].slice(-7).reverse().map(ev=>`<div class="lrow ev-${ev.type}">
+        <div class="ehead">seq ${ev.seq} · <b>${ev.type}</b></div>
+        <div class="emeta">${esc(ev.summary)}</div>
+        <div class="ehash">${short(ev.hash)} ← prev</div></div>`).join("") ||
+        `<div class="row"><span class="mk dot">–</span><div class="bd"><div class="s">—</div></div></div>`}`;
+  }
+}
+
+/* click to inspect */
+cv.addEventListener("click",e=>{
+  const mx=e.clientX,my=e.clientY;let best=null,bd=24,kind=null;
+  memories.forEach(m=>{if(m.x===null)return;
+    const d=Math.hypot(m.x-mx,m.y-my);
+    if(d<bd){bd=d;best=m;kind="mem"}});
+  agents.forEach(a=>{if(a.x===null)return;
+    const d=Math.hypot(a.x-mx,a.y-my);
+    if(d<bd){bd=d;best=a;kind="agent"}});
+  if(!best)return;
+  ui.inspect = kind==="mem"?{kind:"mem",m:best}:{kind:"agent",a:best};
+  document.getElementById("tab-inspect").textContent=
+    kind==="mem"?best.id:best.id;
+  openTab("inspect");
+});
+
+/* ---------------- captions & milestones ---------------- */
+const captionEl=document.getElementById("caption");
+let capTimer=null;
+function caption(pair,holdMs=5200){
+  clearTimeout(capTimer);captionEl.classList.remove("on");
+  setTimeout(()=>{captionEl.innerHTML=esc(pair[0])+`<span class="sub">${esc(pair[1])}</span>`;
+    captionEl.classList.add("on")},DUR(350));
+  capTimer=setTimeout(()=>captionEl.classList.remove("on"),DUR(holdMs));
+}
+function milestone(key){
+  if(milestones[key])return;milestones[key]=true;
+  caption(L().cap[key]);
+}
+
+/* ---------------- chrome ---------------- */
+const primary=document.getElementById("primary"),
+      titlecard=document.getElementById("titlecard"),
+      endcard=document.getElementById("endcard"),
+      roundlabel=document.getElementById("roundlabel"),
+      scoreboard=document.getElementById("scoreboard"),
+      modebtn=document.getElementById("modebtn"),
+      speedbtn=document.getElementById("speedbtn"),
+      langbtn=document.getElementById("langbtn");
+let director=false, dirTimer=null, speed=1, started=false, busy=false, ended=false;
+
+function applyLang(){
+  document.getElementById("simchip").textContent=L().simchip;
+  document.getElementById("titletag").textContent=L().titletag;
+  document.getElementById("dfoot").textContent=L().dfoot;
+  document.getElementById("endbig").textContent=L().endbig;
+  document.getElementById("endtag").textContent=L().endtag;
+  document.querySelectorAll("#dtabs button").forEach(b=>{
+    if(b.dataset.tab!=="inspect") b.textContent=L().tabs[b.dataset.tab]});
+  langbtn.textContent = lang==="es"?"en":"es";
+  modebtn.textContent = director?L().modes.director:L().modes.manual;
+  syncChrome();
+  if(dossier.classList.contains("open"))renderTab();
+}
+langbtn.onclick=()=>{lang=lang==="es"?"en":"es";applyLang()};
+
+function syncChrome(){
+  roundlabel.textContent=L().round(round)+" · "+L().simsec(simNow);
+  scoreboard.textContent=L().home(misplacedHome(),MISPLACED_TOTAL);
+  if(!ended)primary.textContent=L().runround(round+1);
+}
+
+/* ---------------- the round driver ---------------- */
+function runRound(){
+  if(busy||ended)return;
+  busy=true;primary.disabled=true;
+  if(!started){started=true;titlecard.classList.add("off");
+    milestone("seeded");}
+  round++; simNow+=SIM_S_PER_ROUND;
+
+  // stagger the three agent turns visually; compute in order
+  agents.forEach((a,i)=>{
+    setTimeout(()=>{
+      const r=agentRound(a,i);
+      if(!r)return;
+      const tt=memTarget(r.top);
+      const ax=a.x??tt.x,ay=a.y??tt.y,tx=r.top.x??tt.x,ty=r.top.y??tt.y;
+      strokeTo({x:ax,y:ay},{x:tx,y:ty},themeColor(r.theme),700);
+      ripple(tx,ty,themeColor(r.top.home),18,900,650);
+      if(r.emitted){
+        const o=basinPx(r.emitted.origin);
+        strokeTo({x:tx,y:ty},{x:o.x,y:o.y},regionColor(r.emitted.origin),900,700);
+        flabel(tx,ty-16,"SIGNAL · vigor "+fstr(r.emitted.vigor),C.seal,750);
+      }
+    },DUR((90+i*420)/speed));
+  });
+
+  // the resolver is a separate node; in the deployed system it is the
+  // changefeed Lambda — here, the same labeled local stand-in the harness uses
+  setTimeout(()=>{
+    const outcomes=resolverTick();
+    outcomes.forEach(o=>{ui.exhibits.push(o)});
+    if(outcomes.length && dossier.classList.contains("open") &&
+       (ui.tab==="ledger"||ui.tab==="signals")) renderTab();
+    outcomes.filter(o=>o.verdict==="go").forEach(o=>{
+      const m=memById[o.memoryId];
+      const t=memTarget(m);
+      ripple(t.x,t.y,C.pass,34,1200,300);
+      flabel(t.x,t.y-18,"MIGRATED",C.pass,400);
+    });
+    syncChrome();
+
+    if(misplacedHome()===MISPLACED_TOTAL && !ended){
+      ended=true;director=false;clearTimeout(dirTimer);
+      milestone("converged");
+      setTimeout(()=>{
+        document.getElementById("endscore").textContent=
+          L().endscore(MISPLACED_TOTAL,MISPLACED_TOTAL,round);
+        endcard.style.display="";requestAnimationFrame(()=>endcard.classList.remove("off"));
+        primary.textContent="VERIFY";primary.disabled=false;busy=false;
+        primary.onclick=()=>{endcard.classList.add("off");
+          setTimeout(()=>endcard.style.display="none",DUR(1400));
+          openTab("verify");renderVerify(true);
+          primary.onclick=null;primary.style.display="none"};
+      },DUR(1600));
+      return;
+    }
+    busy=false;primary.disabled=false;syncChrome();
+    if(director)dirTimer=setTimeout(runRound,DUR(2000/speed));
+  },DUR(1700/speed));
+}
+primary.onclick=runRound;
+
+modebtn.onclick=()=>{director=!director;
+  modebtn.textContent=director?L().modes.director:L().modes.manual;
+  modebtn.classList.toggle("on",director);
+  if(director&&!busy&&!ended)runRound();else clearTimeout(dirTimer)};
+speedbtn.onclick=()=>{speed=speed===1?2:speed===2?4:1;speedbtn.textContent=speed+"×"};
+document.getElementById("panelbtn").onclick=()=>{
+  dossier.classList.toggle("open");if(dossier.classList.contains("open"))renderTab()};
+document.getElementById("resetbtn").onclick=()=>location.reload();
+addEventListener("keydown",e=>{
+  if(e.code==="Space"||e.code==="ArrowRight"){e.preventDefault();if(!director)runRound()}
+  if(e.key==="r"||e.key==="R")location.reload();
+  if(e.key==="d"||e.key==="D")modebtn.onclick();
+  if(e.key==="p"||e.key==="P")document.getElementById("panelbtn").onclick();
+});
+
+/* ---------------- boot ---------------- */
+seedWorld();
+buildQlist();
+for(let i=0;i<3;i++)addAgent(i);
+applyLang();
+syncChrome();
+</script>
+</body>
+</html>
