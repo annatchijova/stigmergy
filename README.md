@@ -83,7 +83,8 @@ The honest Cloud-deployment, demo, and post-submission sequence is tracked in
 ## Layout
 
     audit/        canonical JSON + quantization, per-node hash chains,
-                  chained Merkle ledger  (canonical.py, chain.py, merkle.py)
+                  chained Merkle ledger, sealed evidence bundles
+                  (canonical.py, chain.py, merkle.py, bundle.py)
     embeddings/   provider protocol; deterministic dev provider
                   (is_semantic=False) and MiniLM (384-dim, semantic)
     ops/          memories (store/recall/reinforce), recruitment
@@ -91,7 +92,8 @@ The honest Cloud-deployment, demo, and post-submission sequence is tracked in
                   migration), orphans (bounded sweep), controller
                   (roaming/dwelling hysteresis), regions (audited creation)
     lambdas/      changefeed webhook resolver + cron sweeper
-    demo/         corpus with deliberately misplaced memories + harness
+    demo/         corpus with deliberately misplaced memories + harness,
+                  console.html (runnable field + bundle verifier, no install)
     tests/        pure suites (no DB) + INTEGRATION_CHECKLIST.md
 
 ## The disciplines, in one paragraph
@@ -184,7 +186,12 @@ What it reproduces exactly, not approximately:
   payload in the page and verification names the forgery**, giving the sealed
   and recomputed hashes and the sequence number where the chain stops relinking.
 
-What it is not: a CockroachDB deployment, a changefeed, or a Lambda. There is
+It also loads **sealed evidence bundles** exported from a real cluster run (see
+below), which is how it stops being a simulation and becomes a dashboard over
+actual runs.
+
+What it is not, when it is simulating: a CockroachDB deployment, a changefeed,
+or a Lambda. There is
 no database, no authority model checking principals, and the resolver is an
 in-page loop — the same labeled stand-in `--local-resolver` is. The migration
 cooldown is compressed from five minutes to eight seconds. The page says all of
@@ -201,6 +208,58 @@ Two honest deviations, both stated in the page:
   vectors, run `python -m tools.bake_embeddings` (needs
   `pip install sentence-transformers`); it writes `demo/minilm_vectors.js`,
   which the page picks up automatically and relabels itself accordingly.
+
+## Sealed evidence bundles
+
+A bundle is one JSON file holding everything needed to re-examine a run without
+the cluster that produced it: the state tables as they stood, every per-node
+hash chain, and every Merkle snapshot, sealed with a hash over its own canonical
+form. It turns the console from a simulation into a **dashboard over real runs**.
+
+    python -m demo.run_demo --dsn ... --bundle run.bundle.json   # export
+    python -m tools.verify_bundle run.bundle.json                # verify
+
+Then open `demo/console.html`, press **Open a sealed bundle**, and the page
+renders the real field and runs the same six checks in JavaScript. Served over
+HTTP it also accepts `?bundle=<url>`.
+
+Six checks, in both implementations:
+
+| | claim |
+|---|---|
+| B1 | the bundle as shipped is the bundle as sealed |
+| B2 | every chain relinks: genesis, dense sequence, `prev_hash` linkage |
+| B3 | every entry hash recomputes from its stored payload |
+| B4 | the content shipped is the content born |
+| B5 | declared memory state reproduces from replaying the chains |
+| B6 | every Merkle snapshot recomputes over its recorded heads |
+
+B5 is the one that matters most: a state column edited to something the chain
+never authorized stops replaying. You can edit the row; you cannot edit the
+evidence.
+
+**Two independent verifiers, and that is the point.** `audit/bundle.py` and the
+JavaScript in `demo/console.html` implement the same six checks separately. If
+they ever disagree about a bundle, one of them is wrong.
+`tests/fixtures/cross_impl.bundle.json` is sealed by the Python canonicalizer
+over deliberately awkward content — accents, CJK, a quote, a backslash, a tab, a
+newline, an astral-plane emoji — and B1 passing in the browser is what proves
+the two canonicalizers agree byte for byte. The console can also export its own
+simulated run as a bundle, which `tools/verify_bundle.py` then verifies; that
+round trip is exercised and passes.
+
+**What a bundle does not prove**, stated because a verifier that implies more
+than it checks is worse than none:
+
+1. **That the writer was authorized.** Authority is enforced at the database
+   (`AUTHORITY_MODEL.md`) and leaves no artifact a detached file can re-check.
+   A bundle shows what happened, not that it was allowed.
+2. **That nothing was omitted wholesale.** Dropping a node's chain entirely
+   leaves an internally consistent bundle. B6 catches it only when a previously
+   published Merkle snapshot already committed to that node — so publish your
+   roots.
+3. **Anything about the per-memory custody chains** (`audit/custody.py`). Those
+   have their own verifier and are out of scope for bundle version 1.
 
 ## Deploying the Lambdas
 

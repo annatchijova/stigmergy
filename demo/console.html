@@ -316,6 +316,32 @@ pre.payload{
 .verdictstrip .r{color:var(--breach)}
 .verdictstrip .p{color:var(--pass)}
 
+/* ---------- sealed bundle verdict ---------- */
+#bundlechecks:empty{display:none}
+#bundlechecks{margin-top:18px;border:1px solid var(--hair-c);border-radius:3px;overflow:hidden}
+.bundlehead{display:flex;gap:18px;align-items:flex-start;justify-content:space-between;
+  flex-wrap:wrap;padding:14px 16px;border-bottom:1px solid var(--hair-c);
+  background:var(--carbon-2)}
+.bseal{font-family:var(--mono);font-size:11.5px;color:var(--seal);word-break:break-all;margin-top:4px}
+.bmeta{font-family:var(--mono);font-size:10.5px;color:var(--bone-3);margin-top:5px}
+.bverdict{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+  padding:5px 11px;border:1px solid var(--hair-c);border-radius:2px;white-space:nowrap}
+.bverdict.ok{color:var(--pass);border-color:rgba(111,174,132,.5)}
+.bverdict.bad{color:var(--breach);border-color:rgba(210,81,58,.55)}
+.blist{padding:6px 0}
+.bcheck{display:grid;grid-template-columns:34px minmax(0,1fr) 54px;gap:12px;align-items:baseline;
+  padding:7px 16px;font-family:var(--mono);font-size:11.5px}
+.bcheck .bid{color:var(--bone-3)}
+.bcheck .bclaim{color:var(--bone-2)}
+.bcheck .bmark{text-align:right;font-size:9.5px;letter-spacing:.16em;color:var(--pass)}
+.bcheck.fail .bmark{color:var(--breach)}
+.bcheck.fail .bclaim{color:var(--bone)}
+.bcheck .bdetail{grid-column:2/4;color:#EFA79A;font-size:10.5px;margin-top:2px;word-break:break-word}
+.bnote{padding:12px 16px;border-top:1px solid var(--hair-c);font-size:12px;line-height:1.65;
+  color:var(--bone-3)}
+.bnote b{color:var(--bone-2);font-weight:400}
+body.mode-bundle .transport .tickread{opacity:.65}
+
 .merkle{margin-top:14px;display:flex;flex-wrap:wrap;gap:18px;align-items:baseline;
   font-family:var(--mono);font-size:11px;color:var(--bone-2)}
 .merkle b{color:var(--seal);font-weight:400;word-break:break-all}
@@ -412,6 +438,9 @@ pre.payload{
       <button class="act" id="btn-run"><span class="en">Run the field</span><span class="es">Ejecutar el campo</span></button>
       <button class="act ghost" id="btn-step"><span class="en">One round</span><span class="es">Una ronda</span></button>
       <button class="act ghost" id="btn-reset"><span class="en">Reseed</span><span class="es">Resembrar</span></button>
+      <button class="act ghost" id="btn-load"><span class="en">Open a sealed bundle</span><span class="es">Abrir un bundle sellado</span></button>
+      <input id="bundle-file" type="file" accept="application/json,.json" hidden>
+      <button class="act ghost" id="btn-sim" hidden><span class="en">Back to the simulation</span><span class="es">Volver a la simulación</span></button>
       <div class="tickread">
         <div><span class="label"><span class="en">rounds</span><span class="es">rondas</span></span> <b id="read-tick">0</b></div>
         <div><span class="label"><span class="en">sealed events</span><span class="es">eventos sellados</span></span> <b id="read-events">0</b></div>
@@ -421,21 +450,21 @@ pre.payload{
 
   <aside class="rail">
     <section class="panel">
-      <h2><span><span class="en">Agents</span><span class="es">Agentes</span></span>
-        <span class="cnt"><span class="en">no channel between them</span><span class="es">sin canal entre ellos</span></span></h2>
+      <h2><span id="agents-title"><span class="en">Agents</span><span class="es">Agentes</span></span>
+        <span class="cnt" id="agents-note"><span class="en">no channel between them</span><span class="es">sin canal entre ellos</span></span></h2>
       <div class="body" id="agents"></div>
     </section>
 
     <section class="panel">
-      <h2><span><span class="en">Live recruitment signals</span><span class="es">Señales de reclutamiento vivas</span></span>
+      <h2><span id="signals-title"><span class="en">Live recruitment signals</span><span class="es">Señales de reclutamiento vivas</span></span>
         <span class="cnt" id="sig-count">0</span></h2>
       <div class="body" id="signals"></div>
     </section>
 
     <section class="panel">
-      <h2><span><span class="en">Misplaced memories home</span><span class="es">Memorias mal ubicadas en casa</span></span>
-        <span class="cnt"><span class="en">by consensus only</span><span class="es">sólo por consenso</span></span></h2>
-      <div class="body">
+      <h2><span id="score-title"><span class="en">Misplaced memories home</span><span class="es">Memorias mal ubicadas en casa</span></span>
+        <span class="cnt" id="score-note"><span class="en">by consensus only</span><span class="es">sólo por consenso</span></span></h2>
+      <div class="body" id="scorebody">
         <div class="score"><b id="score-n">0</b><span class="of">/ 6</span></div>
         <div class="mislist" id="mislist"></div>
         <div class="aside" id="churn"></div>
@@ -460,10 +489,13 @@ pre.payload{
 
     <div class="recordbar">
       <button class="act gold" id="btn-verify"><span class="en">Verify every chain</span><span class="es">Verificar cada cadena</span></button>
+      <button class="act" id="btn-export"><span class="en">Export this run as a bundle</span><span class="es">Exportar esta corrida como bundle</span></button>
       <button class="act" id="btn-snapshot"><span class="en">Take Merkle snapshot</span><span class="es">Tomar snapshot Merkle</span></button>
       <button class="act danger" id="btn-forge"><span class="en">Forge the selected entry</span><span class="es">Falsificar la entrada elegida</span></button>
       <button class="act" id="btn-restore"><span class="en">Undo the forgery</span><span class="es">Deshacer la falsificación</span></button>
     </div>
+
+    <div id="bundlechecks"></div>
 
     <div class="recordgrid">
       <div id="nodes"></div>
@@ -857,6 +889,7 @@ const RECALL_LIMIT        = 5;
 
 /* --------------------------------------------------------------- state --- */
 let memories, regions, agents, signals, chains, snapshots, tick, sealed, running, timer;
+let MODE = "simulation", REGION_IDS = [], loadedBundle = null, bundleChecks = null;
 let selected = null, tampered = null, verifyState = null;
 
 /* Workload only — which query an agent asks next. Never a decision. */
@@ -883,6 +916,8 @@ function seed(){
   rng = mulberry32(20260713);
   const t0 = Date.now();
 
+  MODE = "simulation"; loadedBundle = null; bundleChecks = null;
+  REGION_IDS = THEME_LIST.map(regionIdFor);
   for(const th of THEME_LIST){
     const rid = regionIdFor(th);
     regions[rid] = { id: rid, theme: th, members: [] };
@@ -1014,8 +1049,9 @@ function agentRound(agent){
     agent.region = d.mode === "DWELLING" ? majority : null;
     appendEvent(agent.node_id, "AGENT_MODE_CHANGED", d.trigger, {
       agent_id: agent.agent_id, old_mode: wasMode, new_mode: d.mode,
+      region: agent.region, observation: density.q(),
       ema: d.ema.q(), ema_prev: d.ema_prev.q(),
-      current_region: agent.region, stagnation_count: d.stagnation,
+      stagnation_count: d.stagnation, trigger: d.trigger,
     }, now);
   }
 
@@ -1039,7 +1075,7 @@ function agentRound(agent){
       created_at: now, expires_at: now + SIGNAL_TTL_MS, status: "PENDING",
     };
     signals.push(sig);
-    appendEvent(agent.node_id, "RECRUITMENT_SIGNAL_EMITTED", "HIGH_RESONANCE", {
+    appendEvent(agent.node_id, "SIGNAL_EMITTED", "HIGH_RESONANCE", {
       signal_id: sig.id, memory_id: top.id, origin_region: majority,
       vigor: density.q(), signal_strength: SIGNAL_STRENGTH.q(), decay_rate: DECAY_RATE.q(),
     }, now);
@@ -1085,17 +1121,22 @@ function resolveAll(){
        does not match, and the signals stay pending for the next tick. */
     if(m.lastMigratedAt !== null && now - m.lastMigratedAt < COOLDOWN_MS) continue;
 
-    const from = m.region;
+    const from = m.region, oldTier = m.tier;
     regions[from].members = regions[from].members.filter(x => x !== mid);
     regions[target].members.push(mid);
     m.region = target;
     m.tier = "REGIONAL";
     m.lastMigratedAt = now;
     votes.forEach(s => s.status = "RESOLVED");
-    appendEvent("demo-local-resolver", "MEMORY_MIGRATED", "recruitment consensus reached", {
-      memory_id: mid, from_region: from, to_region: target,
+    appendEvent("demo-local-resolver", "MEMORY_MIGRATED",
+      "weighted recruitment consensus reached (quorum " +
+      CONSENSUS_QUORUM.n + "/" + CONSENSUS_QUORUM.d + ")", {
+      memory_id: mid, from_region: from, target_region: target,
+      old_tier: oldTier, new_tier: "REGIONAL",
       live_signals: live.length, votes_for: votes.length,
-      vigor_for: vigorFor.q(), vigor_max: vigorMax.q(), quorum: CONSENSUS_QUORUM.q(),
+      vigor_for: vigorFor.q(), vigor_max: vigorMax.q(),
+      quorum: CONSENSUS_QUORUM.n + "/" + CONSENSUS_QUORUM.d,
+      accepted_signal_ids: votes.map(v => v.id).sort(),
     }, now);
     layoutAll(false);
   }
@@ -1106,6 +1147,7 @@ function resolveAll(){
    per agent. They share no channel; the only thing passing between them is the
    state each one leaves behind. */
 function oneRound(){
+  if(MODE === "bundle") return;   // a bundle is evidence, not a running field
   for(const a of agents) agentRound(a);
   tick++;
   resolveAll();   /* the changefeed resolver reacts to every write; only its polling is a demo artifact */
@@ -1131,15 +1173,27 @@ function resize(){
   ctx.setTransform(DPR,0,0,DPR,0,0);
   layoutAll(true);
 }
-const THEME_COLOR = { cooking:"#A8481F", astronomy:"#38477E", databases:"#2C6A57" };
+const PALETTE = ["#A8481F","#38477E","#2C6A57","#7A5230","#6B3A6B","#2F5F7A","#8A5A2B","#3E6B4A"];
+const THEME_COLOR = { cooking:PALETTE[0], astronomy:PALETTE[1], databases:PALETTE[2] };
+const regionColor = rid => PALETTE[Math.max(0, REGION_IDS.indexOf(rid)) % PALETTE.length];
+/* In a simulation a memory is inked with the region it BELONGS to, so a
+   misplaced one reads as a foreign colour. A bundle carries no such ground
+   truth — nobody labelled its memories — so there it is inked by where it
+   actually lives, and the page claims nothing more than that. */
+const colorOf = m => MODE === "bundle" ? regionColor(m.region) : THEME_COLOR[m.homeTheme];
+
 function basinOf(rid){
-  const i = THEME_LIST.indexOf(themeOfRegion(rid));
+  const i = Math.max(0, REGION_IDS.indexOf(rid));
+  const n = Math.max(1, REGION_IDS.length);
+  const cols = Math.min(n, 3), rows = Math.ceil(n/cols);
+  const col = i % cols, row = Math.floor(i/cols);
   const narrow = W < 620;
   const padTop = 42, padBottom = narrow ? 38 : 48;   // legend above, region labels below
   const avail = Math.max(140, H - padTop - padBottom);
-  const r = Math.min(W/(narrow ? 6.2 : 6.8), avail/2.35);
-  const drift = i === 1 ? -avail*0.06 : avail*0.03;   // break the row without breaking the fit
-  return { x: W*(1 + 2*i)/6, y: padTop + avail/2 + drift, r };
+  const cw = W/cols, ch = avail/rows;
+  const r = Math.min(cw/(narrow ? 2.05 : 2.25), ch/2.35);
+  const drift = (rows === 1 && i === 1) ? -avail*0.06 : 0;   // break a flat row
+  return { x: cw*(col + 0.5), y: padTop + ch*(row + 0.5) + drift, r };
 }
 function layoutAll(snap){
   if(!memories) return;
@@ -1185,7 +1239,7 @@ function drawField(now){
 
   /* live signals: dashed pheromone lines, opacity = decayed strength */
   const t = Date.now();
-  for(const s of signals){
+  for(const s of (MODE === "bundle" ? [] : signals)){
     if(s.status !== "PENDING") continue;
     const d = decayedStrength(s, t);
     if(d < LIVENESS_FLOOR) continue;
@@ -1204,8 +1258,8 @@ function drawField(now){
   for(const m of memories){
     m.x += (m.tx - m.x) * 0.09;
     m.y += (m.ty - m.y) * 0.09;
-    const col = THEME_COLOR[m.homeTheme];
-    const home = themeOfRegion(m.region) === m.homeTheme;
+    const col = colorOf(m);
+    const home = MODE === "bundle" || themeOfRegion(m.region) === m.homeTheme;
     const r = 3.4 + 2.6*(m.confidence.toNumber() - 0.5);
     if(m.state === "REINFORCED"){
       const g = ctx.createRadialGradient(m.x,m.y,0,m.x,m.y,r*4.2);
@@ -1224,7 +1278,7 @@ function drawField(now){
     }
   }
 
-  agents.forEach(a => {
+  if(MODE !== "bundle") agents.forEach(a => {
     a.x += (a.tx - a.x) * 0.07;
     a.y += (a.ty - a.y) * 0.07;
     ctx.save(); ctx.translate(a.x, a.y);
@@ -1241,10 +1295,23 @@ function drawField(now){
 
 /* ============================================================ rendering === */
 const $ = id => document.getElementById(id);
-function renderAll(){ renderAgents(); renderSignals(); renderScore(); renderNodes(); renderReadouts(); }
-function renderReadouts(){ $("read-tick").textContent = tick; $("read-events").textContent = sealed; }
+function renderAll(){ renderAgents(); renderSignals(); renderScore(); renderNodes();
+  renderReadouts(); renderBundleChecks(); }
+function renderReadouts(){
+  $("read-tick").textContent = MODE === "bundle" ? "—" : tick;
+  $("read-events").textContent = sealed;
+}
 
 function renderAgents(){
+  if(MODE === "bundle"){
+    $("agents").innerHTML = agents.map(a => `<div class="agent">
+      <div class="top"><span class="nm">${a.node_id}</span>
+        <span class="mode ${a.mode==="DWELLING"?"dwell":""}">${String(a.mode).toLowerCase()}</span></div>
+      <div class="meta">${a.entries} sealed ${a.entries===1?"entry":"entries"}${
+        a.mode !== "—" ? " · ema " + a.ema.q(4) : ""}${a.region ? " · "+a.region : ""}</div>
+    </div>`).join("");
+    return;
+  }
   $("agents").innerHTML = agents.map(a => {
     const pct = Math.round(a.ema.toNumber()*100);
     return `<div class="agent">
@@ -1260,6 +1327,17 @@ function renderAgents(){
   }).join("");
 }
 function renderSignals(){
+  if(MODE === "bundle"){
+    $("sig-count").textContent = signals.length;
+    $("signals").innerHTML = signals.length ? signals.slice(0,6).map(s => `<div class="sig">
+      <div class="l1"><span>${s.memory_id.slice(0,8)}… → ${s.origin_region}</span>
+        <span>${s.vigor.q(4)}</span></div>
+      <div class="l2">status ${s.status} · decay ${s.rate.q(4)} — recorded, not live</div>
+    </div>`).join("")
+      : `<div class="empty"><span class="en">this bundle recorded no signals</span>` +
+        `<span class="es">este bundle no registró señales</span></div>`;
+    return;
+  }
   const now = Date.now();
   const live = signals.filter(s => s.status==="PENDING" && s.expires_at>now &&
     decayedStrength(s,now) >= LIVENESS_FLOOR);
@@ -1283,6 +1361,20 @@ function renderSignals(){
   }).join("");
 }
 function renderScore(){
+  if(MODE === "bundle"){
+    const byRegion = {};
+    for(const m of memories) byRegion[m.region] = (byRegion[m.region]||0)+1;
+    const reinforced = memories.filter(m => m.state === "REINFORCED").length;
+    $("scorebody").innerHTML = `
+      <div class="score"><b>${memories.length}</b><span class="of">
+        <span class="en">memories</span><span class="es">memorias</span></span></div>
+      <div class="mislist">${Object.keys(byRegion).sort().map(r => `<div class="mis">
+        <span class="dot" style="background:${regionColor(r)}"></span>
+        <span>${r}</span><span class="where">${byRegion[r]}</span></div>`).join("")}</div>
+      <div class="aside">${reinforced} <span class="en">reinforced · source</span>
+        <span class="es">reforzadas · origen</span> ${escapeHtml(bundleSource)}</div>`;
+    return;
+  }
   const mis = memories.filter(m => m.misplaced);
   const home = mis.filter(m => themeOfRegion(m.region) === m.homeTheme);
   $("score-n").textContent = home.length;
@@ -1302,7 +1394,7 @@ function renderScore(){
   $("mislist").innerHTML = mis.map(m => {
     const atHome = themeOfRegion(m.region) === m.homeTheme;
     return `<div class="mis ${atHome?"home":""}">
-      <span class="dot" style="background:${THEME_COLOR[m.homeTheme]}"></span>
+      <span class="dot" style="background:${colorOf(m)}"></span>
       <span>${m.id}</span>
       <span class="where">${atHome ? "→ "+m.homeTheme : themeOfRegion(m.region)+" · home "+m.homeTheme}</span>
     </div>`;
@@ -1561,11 +1653,383 @@ $("provider-note").innerHTML = Provider.basis === "minilm"
       Corré <span class="num">tools/bake_embeddings.py</span> para meter los vectores reales del modelo
       fijado.</span>`;
 
+/* ======================================================= sealed bundles === */
+/* The same six checks audit/bundle.py runs, reimplemented here so a bundle can
+   be verified by two independent implementations — one of them a browser tab
+   with nothing installed. If they ever disagree, one of them is wrong, and
+   tests/test_canonical_cross_impl.py exists to catch that. */
+const BUNDLE_CLAIMS = [
+  ["B1", "the bundle as shipped is the bundle as sealed",
+         "el bundle que llegó es el bundle que se selló"],
+  ["B2", "every chain relinks: genesis, dense sequence, prev_hash linkage",
+         "cada cadena reenlaza: génesis, secuencia densa, enlace prev_hash"],
+  ["B3", "every entry hash recomputes from its stored payload",
+         "cada hash de entrada se recomputa desde su payload guardado"],
+  ["B4", "the content shipped is the content born",
+         "el contenido que llegó es el contenido que nació"],
+  ["B5", "declared memory state reproduces from replaying the chains",
+         "el estado declarado se reproduce replayando las cadenas"],
+  ["B6", "every Merkle snapshot recomputes over its recorded heads",
+         "cada snapshot Merkle se recomputa sobre sus cabezas registradas"],
+];
+const REPLAYED_EVENTS = new Set(["MEMORY_STORED","MEMORY_REINFORCED","MEMORY_MIGRATED",
+                                 "REDISCOVERED","MEMORIES_ORPHANED"]);
+const SEAL_KEY = "bundle_sha256";
+
+function sealOf(bundle){
+  const body = {};
+  for(const k of Object.keys(bundle)) if(k !== SEAL_KEY) body[k] = bundle[k];
+  return sha256(canonicalJSON(body));
+}
+function bundleEntryHash(node_id, e){
+  return sha256(e.prev_hash + canonicalJSON({
+    node_id, seq: e.seq, event_type: e.event_type, reason: e.reason,
+    created_at: e.created_at, payload: e.payload,
+  }));
+}
+/* Entries across every node in one canonical order — timestamp, then node_id
+   and seq so ties resolve identically in both implementations. */
+function orderedEntries(chains){
+  const out = [];
+  for(const nid of Object.keys(chains).sort())
+    for(const e of chains[nid]) out.push([e.created_at || "", nid, e.seq || 0, e]);
+  out.sort((a,b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1
+                  : a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : a[2] - b[2]);
+  return out;
+}
+function replayBundleState(chains){
+  const state = {};
+  for(const [,,,e] of orderedEntries(chains)){
+    const p = e.payload || {};
+    if(!REPLAYED_EVENTS.has(e.event_type)) continue;
+    if(e.event_type === "MEMORY_STORED"){
+      state[p.memory_id] = { region_id:p.region_id, confidence:p.confidence,
+                             state:"NEUTRAL", tier:"SHORT_TERM" };
+    } else if(e.event_type === "MEMORY_REINFORCED"){
+      const m = state[p.memory_id];
+      if(m){ m.state = p.new_state; m.confidence = p.new_confidence; }
+    } else if(e.event_type === "MEMORY_MIGRATED"){
+      const m = state[p.memory_id];
+      if(m){ m.region_id = p.target_region; m.tier = p.new_tier; }
+    } else if(e.event_type === "REDISCOVERED"){
+      const m = state[p.memory_id];
+      if(m) m.tier = p.new_tier;
+    } else if(e.event_type === "MEMORIES_ORPHANED"){
+      for(const o of (p.orphaned || [])){ const m = state[o.memory_id]; if(m) m.tier = "ORPHANED"; }
+    }
+  }
+  return state;
+}
+function verifyBundleJS(b){
+  const checks = BUNDLE_CLAIMS.map(([id,en,es]) => ({ id, en, es, ok:true, detail:"" }));
+  const by = id => checks.find(c => c.id === id);
+  const fail = (id, detail) => { const c = by(id); if(c.ok){ c.ok = false; c.detail = detail; } };
+
+  let recomputed = null;
+  try { recomputed = sealOf(b); }
+  catch(err){ fail("B1", "bundle is not canonicalizable: " + err.message); }
+  if(recomputed !== null && b[SEAL_KEY] !== recomputed)
+    fail("B1", `declared ${b[SEAL_KEY]}, recomputed ${recomputed}`);
+
+  const chains = b.chains || {};
+  for(const nid of Object.keys(chains).sort()){
+    let expectedPrev = GENESIS_PREV;
+    const list = chains[nid];
+    for(let i=0;i<list.length;i++){
+      const e = list[i];
+      if(e.seq !== i){ fail("B2", `${nid}: expected seq ${i}, found ${e.seq}`); break; }
+      if(e.prev_hash !== expectedPrev){
+        fail("B2", `${nid} seq ${i}: prev_hash does not link to the entry before it`); break; }
+      let h;
+      try { h = bundleEntryHash(nid, e); }
+      catch(err){ fail("B3", `${nid} seq ${i}: entry is not hashable (${err.message})`); break; }
+      if(h !== e.entry_hash){
+        fail("B3", `${nid} seq ${i}: sealed ${e.entry_hash}, recomputed ${h}`); break; }
+      expectedPrev = e.entry_hash;
+    }
+  }
+
+  for(const m of (b.memories || [])){
+    if(!m.content_sha256) continue;
+    if(sha256(m.content || "") !== m.content_sha256)
+      fail("B4", `${m.memory_id}: content does not hash to its recorded digest`);
+  }
+
+  const replayed = replayBundleState(chains);
+  for(const m of (b.memories || [])){
+    const r = replayed[m.memory_id];
+    if(!r){ fail("B5", `${m.memory_id}: no MEMORY_STORED in the bundle — its state is not derivable`); continue; }
+    for(const k of ["region_id","state","tier","confidence"]){
+      const mine = k === "region_id" ? m.region_id : k === "state" ? m.state
+                 : k === "tier" ? m.tier : m.confidence;
+      if(mine !== r[k]){ fail("B5", `${m.memory_id}: declared ${k}=${mine}, replay says ${r[k]}`); break; }
+    }
+  }
+
+  for(const s of (b.snapshots || [])){
+    const heads = s.node_chain_heads || {};
+    let root;
+    try { root = merkleRoot(heads); }
+    catch(err){ fail("B6", `snapshot ${s.snapshot_seq}: heads unusable`); continue; }
+    if(root !== s.merkle_root){
+      fail("B6", `snapshot ${s.snapshot_seq}: declared ${s.merkle_root}, recomputed ${root}`); continue; }
+    for(const nid of Object.keys(heads)){
+      if(!chains[nid])
+        fail("B6", `snapshot ${s.snapshot_seq} commits to node "${nid}", which the bundle does not contain`);
+      else if(!chains[nid].some(e => e.entry_hash === heads[nid]))
+        fail("B6", `snapshot ${s.snapshot_seq}: head for ${nid} appears nowhere in that node's chain`);
+    }
+  }
+  return checks;
+}
+
+/* decimal string at canonical scale -> exact rational, no float in between */
+function decToF(text){
+  const s = String(text == null ? "0" : text).trim();
+  const neg = s.startsWith("-");
+  const [ip, fp=""] = (neg ? s.slice(1) : s).split(".");
+  const digits = ip + fp;
+  return new F(BigInt(neg ? "-" + digits : digits), 10n ** BigInt(fp.length));
+}
+
+function loadBundleObject(b, sourceLabel){
+  if(!b || typeof b !== "object" || !b.chains)
+    throw new Error("that file is not a STIGMERGY bundle (no chains).");
+  setRunning(false);
+  MODE = "bundle"; loadedBundle = b; selected = null; tampered = null; verifyState = null;
+
+  REGION_IDS = (b.regions || []).map(r => r.region_id).sort();
+  regions = {};
+  for(const rid of REGION_IDS) regions[rid] = { id: rid, theme: rid, members: [] };
+
+  memories = (b.memories || []).map((m,i) => ({
+    id: m.memory_id, content: m.content, region: m.region_id, homeTheme: null,
+    misplaced: false, tier: m.tier, state: m.state,
+    confidence: decToF(m.confidence), emb: null, lastMigratedAt: null,
+    custody: m.custody_status, x:0, y:0, tx:0, ty:0, born:i,
+  }));
+  for(const m of memories){
+    if(!regions[m.region]){ regions[m.region] = { id:m.region, theme:m.region, members:[] };
+      if(!REGION_IDS.includes(m.region)) REGION_IDS.push(m.region); }
+    regions[m.region].members.push(m.id);
+  }
+
+  chains = {};
+  for(const nid of Object.keys(b.chains).sort())
+    chains[nid] = b.chains[nid].map(e => ({
+      node_id: nid, seq: e.seq, prev_hash: e.prev_hash, entry_hash: e.entry_hash,
+      event_type: e.event_type, reason: e.reason, created_at: e.created_at,
+      payload_json: canonicalJSON(e.payload), fresh: false,
+    }));
+
+  snapshots = (b.snapshots || []).map(s => ({
+    seq: s.snapshot_seq, parent: null, heads: s.node_chain_heads, root: s.merkle_root }));
+
+  /* Nodes, not agents: a bundle records what each node wrote, and the last mode
+     it announced. Nothing here is running. */
+  agents = Object.keys(chains).map((nid,i) => {
+    const last = [...chains[nid]].reverse().find(e => e.event_type === "AGENT_MODE_CHANGED");
+    const p = last ? JSON.parse(last.payload_json) : null;
+    return { agent_id: p ? p.agent_id : nid, node_id: nid,
+             mode: p ? p.new_mode : "—", ema: p ? decToF(p.ema) : F0,
+             stagnation: p ? (p.stagnation_count || 0) : 0,
+             region: p ? p.current_region : null,
+             entries: chains[nid].length, x:0, y:0, tx:0, ty:0 };
+  });
+
+  signals = (b.signals || []).map(s => ({
+    id: s.signal_id, memory_id: s.memory_id, origin_region: s.origin_region,
+    vigor: decToF(s.vigor), strength: decToF(s.signal_strength), rate: decToF(s.decay_rate),
+    created_at: 0, expires_at: 0, status: s.status,
+  }));
+
+  tick = 0;
+  sealed = Object.values(chains).reduce((a,c) => a + c.length, 0);
+  bundleChecks = verifyBundleJS(b);
+  bundleSource = sourceLabel || "file";
+  applyMode();
+  layoutAll(true);
+  renderAll();
+  doVerify();
+  document.querySelector(".carbon").scrollIntoView({ behavior: "smooth" });
+}
+let bundleSource = "";
+
+function applyMode(){
+  const bundle = MODE === "bundle";
+  $("btn-run").hidden = bundle;
+  $("btn-step").hidden = bundle;
+  $("btn-sim").hidden = !bundle;
+  $("agents-title").innerHTML = bundle
+    ? `<span class="en">Nodes in this bundle</span><span class="es">Nodos en este bundle</span>`
+    : `<span class="en">Agents</span><span class="es">Agentes</span>`;
+  $("agents-note").innerHTML = bundle
+    ? `<span class="en">last mode each announced</span><span class="es">último modo que anunció cada uno</span>`
+    : `<span class="en">no channel between them</span><span class="es">sin canal entre ellos</span>`;
+  $("signals-title").innerHTML = bundle
+    ? `<span class="en">Recorded recruitment signals</span><span class="es">Señales de reclutamiento registradas</span>`
+    : `<span class="en">Live recruitment signals</span><span class="es">Señales de reclutamiento vivas</span>`;
+  $("score-title").innerHTML = bundle
+    ? `<span class="en">What this bundle contains</span><span class="es">Qué contiene este bundle</span>`
+    : `<span class="en">Misplaced memories home</span><span class="es">Memorias mal ubicadas en casa</span>`;
+  $("score-note").innerHTML = bundle
+    ? `<span class="en">as exported</span><span class="es">tal como se exportó</span>`
+    : `<span class="en">by consensus only</span><span class="es">sólo por consenso</span>`;
+  document.body.classList.toggle("mode-bundle", bundle);
+}
+
+function renderBundleChecks(){
+  const el = $("bundlechecks");
+  if(MODE !== "bundle" || !bundleChecks){ el.innerHTML = ""; return; }
+  const bad = bundleChecks.filter(c => !c.ok).length;
+  const b = loadedBundle;
+  const entries = Object.values(chains).reduce((a,c)=>a+c.length,0);
+  el.innerHTML = `
+    <div class="bundlehead">
+      <div>
+        <span class="label"><span class="en">sealed bundle</span><span class="es">bundle sellado</span></span>
+        <div class="bseal">${b[SEAL_KEY] || "(unsealed)"}</div>
+        <div class="bmeta">v${b.bundle_version} · ${b.generator || "?"} ·
+          ${(b.memories||[]).length} memories · ${Object.keys(chains).length} node chains ·
+          ${entries} entries · ${(b.snapshots||[]).length} snapshots
+          ${b.note ? " · " + escapeHtml(b.note) : ""}</div>
+      </div>
+      <div class="bverdict ${bad ? "bad":"ok"}">${bad
+        ? `${bad} <span class="en">check(s) failed</span><span class="es">comprobación(es) fallaron</span>`
+        : `<span class="en">verified</span><span class="es">verificado</span>`}</div>
+    </div>
+    <div class="blist">${bundleChecks.map(c => `
+      <div class="bcheck ${c.ok?"pass":"fail"}">
+        <span class="bid">${c.id}</span>
+        <span class="bclaim"><span class="en">${c.en}</span><span class="es">${c.es}</span></span>
+        <span class="bmark">${c.ok ? "PASS" : "FAIL"}</span>
+        ${c.ok ? "" : `<span class="bdetail">${escapeHtml(c.detail)}</span>`}
+      </div>`).join("")}</div>
+    <div class="bnote">
+      <span class="en"><b>What these six checks do not cover:</b> that the writer was
+        authorised (that is enforced at the database and leaves no artifact a detached file
+        can re-check), that nothing was dropped wholesale (B6 catches it only if a snapshot
+        already committed to the missing node), and the per-memory custody chains, which are
+        out of scope for bundle version 1.</span>
+      <span class="es"><b>Lo que estas seis comprobaciones no cubren:</b> que quien escribió
+        estuviera autorizado (eso se valida en la base y no deja rastro que un archivo suelto
+        pueda re-verificar), que no se haya omitido algo entero (B6 lo detecta sólo si un
+        snapshot ya se comprometía con el nodo faltante), y las cadenas de custodia por
+        memoria, fuera de alcance en la versión 1 del bundle.</span>
+    </div>`;
+}
+
+$("btn-load").onclick = () => $("bundle-file").click();
+$("bundle-file").onchange = ev => {
+  const f = ev.target.files && ev.target.files[0];
+  if(!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try { loadBundleObject(JSON.parse(r.result), f.name); }
+    catch(err){ flashVerdict("Could not open that bundle: " + err.message,
+                             "No se pudo abrir ese bundle: " + err.message); }
+  };
+  r.readAsText(f);
+  ev.target.value = "";
+};
+$("btn-sim").onclick = () => { MODE = "simulation"; applyMode(); seed();
+  $("bundlechecks").innerHTML = "";
+  flashVerdict("Back to the in-browser simulation.", "De vuelta en la simulación del navegador."); };
+
+/* ?bundle=URL — works when the page is served over HTTP; a browser opened
+   from file:// will refuse the fetch, and the picker still works. */
+(function(){
+  const url = new URLSearchParams(location.search).get("bundle");
+  if(!url) return;
+  fetch(url).then(r => { if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then(b => loadBundleObject(b, url))
+    .catch(err => flashVerdict(
+      "Could not fetch " + escapeHtml(url) + ": " + err.message +
+        " — open the file with the picker instead.",
+      "No se pudo traer " + escapeHtml(url) + ": " + err.message +
+        " — abrí el archivo con el selector."));
+})();
+
+/* Export the running simulation in the same bundle format the cluster exports,
+   so the file this page produces can be checked by the OTHER implementation:
+       python -m tools.verify_bundle stigmergy-run.bundle.json
+   That round trip is the claim. If the browser and the Python verifier ever
+   disagree about a bundle, one of them is wrong. */
+function buildBundle(){
+  const heads = currentHeads();
+  const body = {
+    bundle_version: 1,
+    generator: "stigmergy/demo/console.html",
+    note: "in-browser simulation · provider " + Provider.id,
+    regions: REGION_IDS.map(rid => ({
+      region_id: rid, locality: "demo", status: "ACTIVE", generation: 1 })),
+    memories: memories.map(m => ({
+      memory_id: m.id, region_id: m.region, content: m.content,
+      content_sha256: sha256(m.content), state: m.state, tier: m.tier,
+      confidence: m.confidence.q(), custody_status: "CLEAN" })),
+    signals: signals.map(s => ({
+      signal_id: s.id, memory_id: s.memory_id, origin_region: s.origin_region,
+      vigor: s.vigor.q(), signal_strength: s.strength.q(), decay_rate: s.rate.q(),
+      status: s.status, created_at: formatTs(s.created_at),
+      expires_at: formatTs(s.expires_at) })),
+    chains: Object.fromEntries(Object.keys(chains).sort().map(nid => [nid,
+      chains[nid].map(e => ({
+        seq: e.seq, prev_hash: e.prev_hash, entry_hash: e.entry_hash,
+        event_type: e.event_type, reason: e.reason, created_at: e.created_at,
+        payload: JSON.parse(e.payload_json) }))])),
+    snapshots: snapshots.map(s => ({
+      snapshot_seq: s.seq, node_chain_heads: s.heads, merkle_root: s.root,
+      ledger_hash: s.parent || LEDGER_GENESIS,
+      created_at: formatTs(Date.now()) })),
+  };
+  if(!body.snapshots.length && Object.keys(heads).length)
+    body.snapshots.push({ snapshot_seq: 0, node_chain_heads: heads,
+      merkle_root: merkleRoot(heads), ledger_hash: LEDGER_GENESIS,
+      created_at: formatTs(Date.now()) });
+  body[SEAL_KEY] = sealOf(body);
+  return body;
+}
+function exportBundle(){
+  if(MODE === "bundle"){
+    flashVerdict("Already showing a loaded bundle — there is nothing new to seal.",
+                 "Ya estás viendo un bundle cargado — no hay nada nuevo que sellar.");
+    return;
+  }
+  const b = buildBundle();
+  const checks = verifyBundleJS(b);
+  const bad = checks.filter(c => !c.ok);
+  const blob = new Blob([JSON.stringify(b)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "stigmergy-run.bundle.json";
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+  const v = $("verdict");
+  v.className = "verdictstrip " + (bad.length ? "bad" : "ok");
+  v.innerHTML = bad.length
+    ? `<span class="r">SEALED, BUT SELF-CHECK FAILED</span> — ` +
+      bad.map(c => `${c.id}: ${escapeHtml(c.detail)}`).join("<br>")
+    : `<span class="p">SEALED</span> <span class="g">${b[SEAL_KEY]}</span><br>
+       <span class="en">stigmergy-run.bundle.json — ${b.memories.length} memories,
+         ${Object.keys(b.chains).length} node chains. It passes B1\u2013B6 here; check it
+         against the other implementation with
+         <span class="num">python -m tools.verify_bundle stigmergy-run.bundle.json</span>.</span>
+       <span class="es">stigmergy-run.bundle.json — ${b.memories.length} memorias,
+         ${Object.keys(b.chains).length} cadenas de nodo. Pasa B1\u2013B6 acá; verificalo
+         contra la otra implementación con
+         <span class="num">python -m tools.verify_bundle stigmergy-run.bundle.json</span>.</span>`;
+}
+$("btn-export").onclick = exportBundle;
+
 /* A named inspection handle, so the field can be driven and audited from a
    console or a test harness without reaching into closures. */
 window.STIGMERGY = {
   oneRound, seed, doVerify, takeSnapshot, verifyChain, merkleRoot, currentHeads,
   sha256, canonicalJSON, entryHash, F, Fr,
+  sealOf, verifyBundle: verifyBundleJS, replayBundleState, loadBundle: loadBundleObject,
+  buildBundle, exportBundle,
+  bundleChecks: () => bundleChecks,
+  mode: () => MODE,
   provider: () => ({ id: Provider.id, basis: Provider.basis }),
   state: () => ({
     tick, sealed, running,
