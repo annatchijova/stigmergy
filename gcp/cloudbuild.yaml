@@ -1,0 +1,9 @@
+# Builds the adapter image with the custom Dockerfile under gcp/ (Cloud Build's
+# default context is the repository root, which the Dockerfile's COPY . needs).
+# Invoked by gcp/deploy.sh: gcloud builds submit --config gcp/cloudbuild.yaml
+#   --substitutions _IMAGE=<region>-docker.pkg.dev/<project>/<repo>/<name>:<tag>
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-f", "gcp/Dockerfile", "-t", "${_IMAGE}", "."]
+images:
+  - "${_IMAGE}"
