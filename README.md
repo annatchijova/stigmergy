@@ -10,6 +10,10 @@ central authority.
 Built for the **CockroachDB × AWS — Build with Agentic Memory**
 hackathon. Apache 2.0.
 
+**Live:** <https://annatchijova.github.io/stigmergy/> — the explainer page, the
+runnable field console (with one-click replay of a real sealed run), and the
+coordination and custody viewers.
+
 ## Why this exists
 
 Most multi-agent systems coordinate through orchestration: a controller
