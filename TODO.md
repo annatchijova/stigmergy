@@ -38,9 +38,30 @@ corresponding execution evidence exists.
 
 ## 3. Hackathon demo
 
-- [ ] Choose a synthetic scenario with clearly misplaced memories, competing
-  recruitment signals, consensus dilution, migration cooldown, an orphan
-  sweep, and a revoked node.
+Shot order, measured timings and the honesty beats live in `DEMO_RUNBOOK.md`.
+What is verified as of this pass: the 230 pure assertions; `demo/console.html`
+running the field to 6/6 in ~40 s with zero page errors; the forgery beat
+naming the tampered entry; `tests/fixtures/cross_impl.bundle.json` passing all
+six checks **in the browser** (the two canonicalizers agree byte for byte); and
+a console-exported bundle verifying under `tools/verify_bundle.py` (the round
+trip closes in both directions). What is NOT verified: anything requiring a
+cluster or an AWS account — see sections 1 and 2, still unexecuted.
+
+- [x] Choose a synthetic scenario with clearly misplaced memories, competing
+  recruitment signals, consensus dilution, and migration cooldown
+  (`demo/corpus.py` for the cluster, the console's own corpus for the browser;
+  both seed six deliberately misplaced memories). An orphan sweep and a revoked
+  node are implemented and pure-tested but are NOT part of either demo run's
+  narrative yet — the cron sweeper and `revoke_node` would have to be driven
+  explicitly to appear on camera.
+- [ ] Drive an orphan sweep and a node revocation inside the recorded run, or
+  drop them from the submission text. Right now the text would promise a beat
+  the footage does not contain. `demo/run_demo.py` never calls either one
+  (verified: zero references to `orphans`/`revoke_node` in the harness). The
+  cheap path to the orphan beat: call `bounded_drain` with a short
+  `ORPHAN_WINDOW_SECONDS` at the end of a cluster run, then load that bundle
+  in the console — its replayer already understands `MEMORIES_ORPHANED` and
+  paints the tier change, so the beat costs one harness call, not new UI.
 - [ ] Record a sub-three-minute video: shared CockroachDB memory → independent
   agent traces → exact deterministic resolution → per-node audit chains →
   Merkle verification → AWS resolver/sweeper once Cloud evidence exists.

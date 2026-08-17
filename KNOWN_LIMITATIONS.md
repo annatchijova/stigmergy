@@ -145,13 +145,32 @@ would need that schema column.
   it does not call them. The verifier of record is
   `audit.custody.verify_custody_chain` against live rows, not the
   viewer's display hashes (`pseudoHash`, explicitly cosmetic).
-- **No sealed evidence bundle export yet.** MNEME's `bundle.py` /
-  `verify_offline.py` (export the whole field as one hash-sealed file, a
-  distrusting third party verifies offline with one stdlib script) was
-  not ported in this pass — natural fast-follow once custody+taint have
-  Cloud integration-checklist evidence (`tests/INTEGRATION_CHECKLIST.md`).
-  `demo/field_viewer.html`'s "EXPORT EVIDENCE BUNDLE" beat is labeled
-  `(PLANNED)` for exactly this reason.
+- **Sealed bundles do not cover the custody chains.** `audit/bundle.py`
+  now exists and exports regions, memories, every per-node hash chain and
+  every Merkle snapshot as one sealed file, verified independently by
+  `tools/verify_bundle.py` and by the JavaScript in `demo/console.html`.
+  A memory's `custody_status` column travels inside the bundle, but the
+  per-memory custody chains of `audit/custody.py` do not, and bundle
+  version 1 makes no claim about them — the verifier of record for those
+  remains `audit.custody.verify_custody_chain` against live rows.
+  `demo/field_viewer.html`'s "EXPORT EVIDENCE BUNDLE" beat stays labeled
+  `(PLANNED)` for exactly that reason: what it depicts exporting is the
+  custody layer, which bundle v1 does not seal.
+
+## Baked vectors in the browser console
+
+`demo/console.html` decides whether it is running the pinned semantic model
+by reading the `__provider` label out of `demo/minilm_vectors.js`, and it
+requires that table to cover every text it will embed (a gap demotes the
+whole table to the labeled lexical provider and is stated in the page).
+Coverage it checks; **provenance it trusts.** A table baked by a different
+provider but labeled `all-MiniLM-L6-v2` is indistinguishable to the page,
+which would then narrate semantic convergence over vectors that have none.
+`tools/bake_embeddings.py` is the only sanctioned writer of that file, and
+it is the authority on the label. This is the same trust shape as the
+cluster's `verify_provider()` — except the cluster can check the audit
+chain's `MEMORY_STORED.provider_id` against live rows, and a static page
+served from `file://` has nothing to check against.
 
 ## Demo-only substitutes
 

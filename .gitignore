@@ -9,6 +9,11 @@ __pycache__/
 # but never commit a persisted node id if one lands in-tree)
 .stigmergy/
 
+# Run artifacts: sealed bundles from a local demo run, and the baked vector
+# table (a build output of tools/bake_embeddings.py, not source).
+demo/minilm_vectors.js
+/*.bundle.json
+
 # OS / editor cruft
 .DS_Store
 

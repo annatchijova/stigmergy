@@ -78,7 +78,8 @@ The executed adversarial evidence is recorded in
 The implementation and reproducibility work is summarized in
 [docs/ENGINEERING_LOG_2026-07-21.md](docs/ENGINEERING_LOG_2026-07-21.md).
 The honest Cloud-deployment, demo, and post-submission sequence is tracked in
-[TODO.md](TODO.md).
+[TODO.md](TODO.md). How to record the demo — and what the recording must not
+imply — is in [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md).
 
 ## Layout
 
@@ -94,6 +95,8 @@ The honest Cloud-deployment, demo, and post-submission sequence is tracked in
     lambdas/      changefeed webhook resolver + cron sweeper
     demo/         corpus with deliberately misplaced memories + harness,
                   console.html (runnable field + bundle verifier, no install)
+    tools/        one-command local secure demo, bundle verifier, embedding
+                  bake step, authority regression runner
     tests/        pure suites (no DB) + INTEGRATION_CHECKLIST.md
 
 ## The disciplines, in one paragraph
@@ -113,9 +116,11 @@ an audited event. Boundaries reject with our words, not the driver's
     cd stigmergy
     for t in tests/test_*_pure.py; do python3 "$t"; done
 
-~160 tests: canonicalization, hash sensitivity, Merkle ambiguity,
+230 assertions: canonicalization, hash sensitivity, Merkle ambiguity,
 reinforcement closed forms, consensus at exact boundaries, hysteresis at
-exact thresholds, envelope parsing, drain budgets, lineage discipline.
+exact thresholds, envelope parsing, drain budgets, lineage discipline,
+and the build-time contract between the browser console and the vector
+table baked for it.
 Transactional behavior is deliberately NOT faked with mock cursors — it
 runs against the real cluster per `tests/INTEGRATION_CHECKLIST.md`.
 
@@ -129,9 +134,24 @@ are rejected, verifies the chain, then removes the cluster data.
 
 ## Running the demo
 
-Requires CockroachDB v25.2+ with `SET CLUSTER SETTING
-feature.vector_index.enabled = true;` and the schema applied
-(`cockroach sql < schema.sql`).
+One command, if you have the `cockroach` binary (v25.2+) and `psycopg`:
+
+    tools/run_secure_demo_local.sh
+
+It starts a disposable localhost cluster, applies the schema, creates one
+authenticated principal per node, performs the trusted bootstrap, runs the
+field, verifies every chain and the ledger, **exports a sealed evidence
+bundle, verifies it with the independent verifier**, and deletes the
+cluster. The bundle outlives the cluster, which is the point. It
+auto-detects and announces its provider; without `sentence-transformers`
+it runs `deterministic` and tells you what that costs you.
+
+For the recording itself — shot order, measured timings, and the
+sentences that carry each beat — see [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md).
+
+The manual path, for a cluster you already have. Requires CockroachDB
+v25.2+ with `SET CLUSTER SETTING feature.vector_index.enabled = true;`
+and the schema applied (`cockroach sql < schema.sql`).
 
     pip install psycopg sentence-transformers
     python -m demo.run_demo --dsn "$STIGMERGY_REPORT_DSN" \
@@ -207,7 +227,17 @@ Two honest deviations, both stated in the page:
 - Recall therefore runs a tf-idf cosine, not MiniLM. To swap in the real
   vectors, run `python -m tools.bake_embeddings` (needs
   `pip install sentence-transformers`); it writes `demo/minilm_vectors.js`,
-  which the page picks up automatically and relabels itself accordingly.
+  which the page loads on reload and relabels itself accordingly. The table
+  is a build artifact, absent from a fresh clone by design.
+
+  A table that does **not** cover the console's corpus is refused, with the
+  count of missing texts stated in the page's own provider note. This is not
+  defensive decoration: a missing vector scores distance 1, so a partial
+  table would collapse recall to insertion order while the page claimed the
+  pinned semantic model — `is_semantic`'s failure mode arriving through a
+  build step instead of a provider. Full coverage or the labeled fallback,
+  nothing in between, and `tests/test_console_contract_pure.py` pins the
+  seam so the two halves cannot drift apart in silence again.
 
 ## Sealed evidence bundles
 

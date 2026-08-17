@@ -30,11 +30,22 @@ import base64
 import hashlib
 import json
 import pathlib
+import re
 
 from demo.corpus import MISPLACED, QUERIES, THEMES
 
-OUT = pathlib.Path(__file__).resolve().parent.parent / "demo" / "minilm_vectors.js"
+DEMO_DIR = pathlib.Path(__file__).resolve().parent.parent / "demo"
+OUT = DEMO_DIR / "minilm_vectors.js"
+CONSOLE = DEMO_DIR / "console.html"
 MODEL = "all-MiniLM-L6-v2"
+
+# The console seeds its OWN corpus (see the comment above `const THEMES` in
+# console.html: demo/corpus.py is written for the semantic provider and is
+# deliberately hard lexically). Both corpora therefore have to be baked, or the
+# table covers a corpus the page never embeds and every lookup misses. The page
+# refuses a table that does not cover it, so a mismatch is loud — but it is
+# cheaper to bake correctly than to be told off by the page.
+CONSOLE_TEXT_COUNT = 39  # 3 themes x 8 + 6 misplaced + 3 x 3 queries
 
 
 def corpus_texts() -> list[str]:
@@ -45,6 +56,46 @@ def corpus_texts() -> list[str]:
     for theme in QUERIES:
         texts.extend(QUERIES[theme])
     return texts
+
+
+def console_texts() -> list[str]:
+    """The console's inline corpus, read out of the page that owns it.
+
+    console.html has to run from `file://` with nothing installed, so it cannot
+    fetch a shared JSON corpus — the texts live inline in the page and this is
+    the seam where the two meet. Extraction is strict on purpose: a corpus edit
+    that changes the shape fails the bake instead of quietly baking a subset.
+    """
+    html = CONSOLE.read_text(encoding="utf-8")
+    try:
+        start = html.index("const THEMES = {")
+        end = html.index("const THEME_LIST")
+    except ValueError as exc:  # pragma: no cover - structural guard
+        raise SystemExit(
+            f"Could not locate the corpus block in {CONSOLE.name}: {exc}. "
+            "If the page was restructured, update console_texts()."
+        ) from exc
+
+    # Corpus entries are the only long double-quoted literals in that block.
+    texts = [
+        raw.encode().decode("unicode_escape")
+        for raw in re.findall(r'"([^"\\\n]{25,})"', html[start:end])
+    ]
+    if len(texts) != CONSOLE_TEXT_COUNT:
+        raise SystemExit(
+            f"Extracted {len(texts)} texts from {CONSOLE.name}, expected "
+            f"{CONSOLE_TEXT_COUNT}. Baking a partial table is exactly the failure "
+            "the console now refuses; fix the extraction or CONSOLE_TEXT_COUNT."
+        )
+    return texts
+
+
+def all_texts() -> list[str]:
+    """Cluster corpus + console corpus, de-duplicated, order preserved."""
+    seen: dict[str, None] = {}
+    for text in corpus_texts() + console_texts():
+        seen.setdefault(text, None)
+    return list(seen)
 
 
 def quantize_int8(vector) -> str:
@@ -60,7 +111,7 @@ def quantize_int8(vector) -> str:
 def main() -> None:
     from sentence_transformers import SentenceTransformer
 
-    texts = corpus_texts()
+    texts = all_texts()
     if len(set(texts)) != len(texts):
         raise SystemExit("Duplicate text in the corpus — content-hash keys would collide.")
 
@@ -83,6 +134,8 @@ def main() -> None:
     )
     print(f"[bake] {len(texts)} vectors from {MODEL} -> {OUT.relative_to(OUT.parents[1])} "
           f"({OUT.stat().st_size // 1024} KiB)")
+    print(f"[bake] covers demo/corpus.py ({len(corpus_texts())} texts) and "
+          f"demo/console.html ({len(console_texts())} texts)")
 
 
 if __name__ == "__main__":
