@@ -554,6 +554,13 @@ body.mode-bundle .transport .tickread{opacity:.65}
   </div>
 </section>
 
+<!-- Written by tools/bake_embeddings.py when the pinned sentence-transformers
+     model is available locally; absent from a fresh clone on purpose (a 39-vector
+     table is a build artifact, not source). A missing file here is not an error:
+     window.MINILM_VECTORS stays undefined and the provider below demotes itself
+     to the labeled lexical fallback in plain sight. -->
+<script src="minilm_vectors.js"></script>
+
 <script>
 "use strict";
 /* ============================================================================
@@ -807,20 +814,41 @@ function b64ToInt8(b64){
   return out;
 }
 
+/* Set when a baked table is present but unusable. A gap must never be silent:
+   distance() answers 1 for a missing vector, so a partial table would collapse
+   recall to insertion order while the page relabeled itself semantic — the exact
+   fabricated certainty run_demo.py refuses under is_semantic=False. */
+let VECTOR_TABLE_GAP = null;
+
 const Provider = (() => {
+  /* Every text this page will ever embed. The table must cover all of them. */
+  const required = [];
+  for(const th of THEME_LIST) required.push(...THEMES[th]);
+  for(const [,,text] of MISPLACED) required.push(text);
+  for(const th of THEME_LIST) required.push(...QUERIES[th]);
+
   if(MINILM_VECTORS){
     const cache = new Map();
-    for(const k in MINILM_VECTORS) cache.set(k, normalize(b64ToInt8(MINILM_VECTORS[k])));
-    return {
-      id: MINILM_VECTORS.__provider || "all-MiniLM-L6-v2 (precomputed)",
-      semantic: true,
-      basis: "minilm",
-      embed(text){
-        const v = cache.get(sha256(text).slice(0,16));
-        if(v) return v;
-        return null;
-      },
-    };
+    let unreadable = 0;
+    for(const k in MINILM_VECTORS){
+      if(k.startsWith("__")) continue;   /* __provider / __dim are metadata, not vectors */
+      try { cache.set(k, normalize(b64ToInt8(MINILM_VECTORS[k]))); }
+      catch(err){ unreadable++; }
+    }
+    const missing = required.filter(t => !cache.has(sha256(t).slice(0,16))).length;
+    if(missing === 0 && cache.size > 0){
+      return {
+        id: MINILM_VECTORS.__provider || "all-MiniLM-L6-v2 (precomputed)",
+        semantic: true,
+        basis: "minilm",
+        embed(text){
+          const v = cache.get(sha256(text).slice(0,16));
+          if(v) return v;
+          return null;
+        },
+      };
+    }
+    VECTOR_TABLE_GAP = { have: cache.size, need: required.length, missing, unreadable };
   }
   /* lexical fallback: tf-idf over the seeded corpus, cosine distance. */
   const idf = new Map(); let docs = [];
@@ -1623,7 +1651,27 @@ $("legend").innerHTML = THEME_LIST.map(t =>
   `<span><i style="background:var(--soil-3)"></i><span class="en">reinforced</span>` +
   `<span class="es">reforzada</span></span>`;
 
-$("provider-note").innerHTML = Provider.basis === "minilm"
+/* A baked table that does not cover this corpus is reported as the build
+   mismatch it is, never quietly absorbed into the lexical wording below. */
+const GAP_NOTE = !VECTOR_TABLE_GAP ? "" :
+  `<span class="en"><b>A baked vector table was found and refused.</b> It carries
+    <span class="num">${VECTOR_TABLE_GAP.have}</span> readable vectors${VECTOR_TABLE_GAP.unreadable
+    ? ` (<span class="num">${VECTOR_TABLE_GAP.unreadable}</span> unreadable)` : ""}, and
+    <span class="num">${VECTOR_TABLE_GAP.missing}</span> of this page's
+    <span class="num">${VECTOR_TABLE_GAP.need}</span> texts are missing from it. A partial table is worse
+    than none: every miss would score distance 1 and recall would silently fall back to insertion order while
+    this line claimed the pinned model. Re-run <span class="num">python -m tools.bake_embeddings</span>
+    against the current corpus. Falling back to the labeled lexical provider: </span>
+   <span class="es"><b>Se encontró una tabla de vectores horneada y se rechazó.</b> Trae
+    <span class="num">${VECTOR_TABLE_GAP.have}</span> vectores legibles${VECTOR_TABLE_GAP.unreadable
+    ? ` (<span class="num">${VECTOR_TABLE_GAP.unreadable}</span> ilegibles)` : ""}, y le faltan
+    <span class="num">${VECTOR_TABLE_GAP.missing}</span> de los
+    <span class="num">${VECTOR_TABLE_GAP.need}</span> textos de esta página. Una tabla parcial es peor que
+    ninguna: cada falta daría distancia 1 y el recall caería en silencio al orden de inserción mientras esta
+    línea afirmaba el modelo fijado. Volvé a correr <span class="num">python -m tools.bake_embeddings</span>
+    sobre el corpus actual. Usando el proveedor léxico etiquetado: </span>`;
+
+$("provider-note").innerHTML = GAP_NOTE + (Provider.basis === "minilm"
   ? `<span class="en"><b>Provider:</b> the pinned <span class="num">all-MiniLM-L6-v2</span> embeddings,
       precomputed offline and quantized into this page; distances are computed live here. Same model the
       cluster demo pins, so the convergence you see is semantic convergence.</span>
@@ -1651,13 +1699,15 @@ $("provider-note").innerHTML = Provider.basis === "minilm"
       convergencia en vez de afirmar una certeza que no se ganó. Entonces: el mecanismo que mirás es el real;
       la tarea de similitud de abajo se hizo lo bastante legible para un proveedor que entra en una pestaña.
       Corré <span class="num">tools/bake_embeddings.py</span> para meter los vectores reales del modelo
-      fijado.</span>`;
+      fijado.</span>`);
 
 /* ======================================================= sealed bundles === */
 /* The same six checks audit/bundle.py runs, reimplemented here so a bundle can
    be verified by two independent implementations — one of them a browser tab
    with nothing installed. If they ever disagree, one of them is wrong, and
-   tests/test_canonical_cross_impl.py exists to catch that. */
+   tests/fixtures/cross_impl.bundle.json — sealed by the Python canonicalizer over
+   deliberately awkward content — is what catches a disagreement: B1 passing here
+   means both canonicalizers produced the same bytes. */
 const BUNDLE_CLAIMS = [
   ["B1", "the bundle as shipped is the bundle as sealed",
          "el bundle que llegó es el bundle que se selló"],
