@@ -57,6 +57,66 @@ above is a read or a write against CockroachDB. Design document:
 `ARCHITECTURE.md`. Schema (the real spec — most invariants are
 constraints, not conventions): `schema.sql`.
 
+## Using it end to end
+
+Five steps, from nothing installed to a cloud deployment. Each step is real and
+independently verifiable — none of them asks you to trust a screenshot. Do them
+in order the first time; the mental model builds as you go.
+
+**0 — What you need.** Python 3.11+, the `cockroach` binary (v25.2+, for the
+`VECTOR` index), and `psycopg`. For the semantic run also `sentence-transformers`
+(it pulls torch). On an externally-managed Python (Debian/Ubuntu) use a venv or
+`pip install --break-system-packages`.
+
+**1 — See the decision math and the audit, in a browser (zero setup).**
+Open `demo/console.html` — no server, no build, no database. Press **Run the
+field**: agents recall, reinforce, and migrate memories by consensus, every step
+sealed into a hash chain. Then edit any payload and press **Verify** — the page
+names the forgery, with the sealed hash, the recomputed hash, and the sequence
+where the chain stops relinking. This is a *simulation of the field with the
+exact rational arithmetic and real SHA-256* — not the database, and it says so on
+its face.
+
+**2 — Run the real system locally (real CockroachDB, one command).**
+
+    tools/run_secure_demo_local.sh                                  # deterministic provider
+    STIGMERGY_DEMO_PROVIDER=minilm tools/run_secure_demo_local.sh   # semantic (the take worth recording)
+
+Starts a disposable local cluster, applies `schema.sql`, creates **one
+authenticated SQL principal per node**, bootstraps authority, runs the field,
+verifies every hash chain and the Merkle ledger, **exports a sealed evidence
+bundle**, verifies it with an independent verifier, then deletes the cluster.
+The bundle outlives the cluster — that is the point.
+
+**3 — Re-examine that real run with no cluster at all.**
+Open `demo/console.html` → **Replay the real run** (a real sealed bundle ships
+with the page), or **Open a sealed bundle** and pick your own `run.bundle.json`.
+The page renders the real field and re-runs the same six checks (B1–B6) in the
+browser — a second, independent implementation of the verifier. Edit one
+`region_id` in the file and B5 fails: you can edit the row, you cannot edit the
+evidence.
+
+**4 — Run against a cluster you own.**
+Apply the schema, then register the node identities and grants
+(`AUTHORITY_MODEL.md`; `tools/bootstrap_prod_authority.py` finishes the audited
+bootstrap) and create one SQL user per node
+(`tools/provision_service_users.sh`). Then:
+
+    python -m demo.run_demo --dsn "$SEED_DSN" --seed-dsn "$SEED_DSN" \
+        --agent-dsn "$AGENT_0" --agent-dsn "$AGENT_1" --agent-dsn "$AGENT_2" \
+        --resolver-dsn "$RESOLVER_DSN" \
+        --agents 3 --rounds 20 --provider minilm --local-resolver --bundle run.bundle.json
+
+One authenticated principal per node is required by design — a shared connection
+cannot masquerade as many nodes.
+
+**5 — Deploy the always-on resolver and sweeper to the cloud.**
+Google Cloud Run: `bash gcp/deploy.sh` ([gcp/README.md](gcp/README.md)).
+AWS Lambda: `infra/template.json` ([infra/README.md](infra/README.md)). Both keep
+one node = one CockroachDB principal = one secret; the resolver is public but
+gated by a changefeed token, the sweeper is private and scheduler-invoked. See
+[Deploying to Google Cloud](#deploying-to-google-cloud-cloud-run) below.
+
 ## Authority after the MNEME red-team transfer
 
 Hash chains show what happened; they do not authorize the writer. STIGMERGY
@@ -93,6 +153,7 @@ imply — is in [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md).
                   migration), orphans (bounded sweep), controller
                   (roaming/dwelling hysteresis), regions (audited creation)
     lambdas/      changefeed webhook resolver + cron sweeper
+    gcp/          Cloud Run adapter (main.py) + one-command deploy (deploy.sh)
     demo/         corpus with deliberately misplaced memories + harness,
                   console.html (runnable field + bundle verifier, no install)
     tools/        one-command local secure demo, bundle verifier, embedding
@@ -291,7 +352,33 @@ than it checks is worse than none:
 3. **Anything about the per-memory custody chains** (`audit/custody.py`). Those
    have their own verifier and are out of scope for bundle version 1.
 
-## Deploying the Lambdas
+## Deploying to Google Cloud (Cloud Run)
+
+`gcp/deploy.sh` is the Google Cloud counterpart to the AWS SAM scaffold below —
+same identity contract, different substrate. It provisions three Secret Manager
+secrets, a per-service runtime service account, two Cloud Run services, and the
+Cloud Scheduler tick, then prints the service URLs and the identity smoke-tests.
+Full order and residual boundaries: [gcp/README.md](gcp/README.md).
+
+    export GCP_PROJECT=your-project-id
+    export RESOLVER_DSN='postgresql://stigmergy_resolver:...@host:26257/stigmergy?sslmode=verify-full'
+    export SWEEPER_DSN='postgresql://stigmergy_sweeper:...@host:26257/stigmergy?sslmode=verify-full'
+    export CHANGEFEED_TOKEN="$(openssl rand -hex 32)"
+    bash gcp/deploy.sh
+
+- **resolver** — Cloud Run public at the IAM layer (CockroachDB's webhook cannot
+  present a GCP OIDC token) but gated by the constant-time
+  `x-stigmergy-changefeed-token` check inside the handler.
+- **sweeper** — Cloud Run private; Cloud Scheduler invokes it with OIDC and
+  `roles/run.invoker`.
+
+`gcp/main.py` is a thin HTTP wrapper over the same handlers the Lambdas use — the
+domain core is untouched, and the deployment secret arrives as a plain env var,
+so no cloud SDK is added. CockroachDB Cloud signs with a private CA, so the image
+bakes the cluster root at libpq's default path (`sslmode=verify-full` needs no
+`sslrootcert` in the DSN).
+
+## Deploying the Lambdas (AWS)
 
 The repository includes `infra/template.json`, which provisions separately
 scoped Lambda roles, Secrets Manager access, a resolver Function URL, and the
