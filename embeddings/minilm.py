@@ -28,8 +28,7 @@ class MiniLMEmbeddingProvider:
         except ImportError as exc:
             raise ImportError(
                 "sentence-transformers is required for MiniLMEmbeddingProvider. "
-                "Install with:
-"
+                "Install with:\n"
                 "    pip install sentence-transformers --break-system-packages"
             ) from exc
 
