@@ -379,7 +379,7 @@ es: {
   inspectMem: "memoria", inspectAgent: "agente",
   reasonQuery: t => `mejor hit de evocación para una consulta de ${t}`,
 }};
-let lang = (navigator.language || "en").slice(0,2) === "es" ? "es" : "en";
+let lang = "en";  // English by default; the EN/ES toggle switches it
 const L = () => LANGS[lang];
 
 /* ---------------- exact rationals (BigInt) ---------------- */
