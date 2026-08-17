@@ -440,6 +440,8 @@ body.mode-bundle .transport .tickread{opacity:.65}
       <button class="act ghost" id="btn-reset"><span class="en">Reseed</span><span class="es">Resembrar</span></button>
       <button class="act ghost" id="btn-load"><span class="en">Open a sealed bundle</span><span class="es">Abrir un bundle sellado</span></button>
       <input id="bundle-file" type="file" accept="application/json,.json" hidden>
+      <button class="act ghost" id="btn-replay-real"><span class="en">Replay the real run</span><span class="es">Reproducir la corrida real</span></button>
+      <button class="act ghost" id="btn-replay-xi"><span class="en">Replay the cross-impl bundle</span><span class="es">Reproducir el bundle cross-impl</span></button>
       <button class="act ghost" id="btn-sim" hidden><span class="en">Back to the simulation</span><span class="es">Volver a la simulación</span></button>
       <div class="tickread">
         <div><span class="label"><span class="en">rounds</span><span class="es">rondas</span></span> <b id="read-tick">0</b></div>
@@ -560,6 +562,11 @@ body.mode-bundle .transport .tickread{opacity:.65}
      window.MINILM_VECTORS stays undefined and the provider below demotes itself
      to the labeled lexical fallback in plain sight. -->
 <script src="minilm_vectors.js"></script>
+<!-- Embedded sealed bundles for one-click replay: a real cluster run and the
+     cross-implementation fixture. Same <script src> pattern as the vectors
+     above, so the console stays a single self-contained page (no fetch/CSP). -->
+<script src="real-run.bundle.js"></script>
+<script src="cross-impl.bundle.js"></script>
 
 <script>
 "use strict";
@@ -1982,6 +1989,17 @@ $("bundle-file").onchange = ev => {
   r.readAsText(f);
   ev.target.value = "";
 };
+/* One-click replay of a bundle shipped with the page (see the <script src>
+   tags near minilm_vectors.js). Same verify+render path as a file the user
+   opens — the bundle is evidence either way. */
+function replayEmbedded(key, label){
+  const b = (window.STIGMERGY_BUNDLES || {})[key];
+  if(!b){ flashVerdict("Embedded bundle not loaded: " + key,
+                       "Bundle embebido no cargado: " + key); return; }
+  loadBundleObject(b, label);
+}
+$("btn-replay-real").onclick = () => replayEmbedded("real-run", "real cluster run");
+$("btn-replay-xi").onclick   = () => replayEmbedded("cross-impl", "cross-impl fixture");
 $("btn-sim").onclick = () => { MODE = "simulation"; applyMode(); seed();
   $("bundlechecks").innerHTML = "";
   flashVerdict("Back to the in-browser simulation.", "De vuelta en la simulación del navegador."); };
