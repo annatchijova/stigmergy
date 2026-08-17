@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+.venv/
 
 # Local node identity (see audit chain: ~/.stigmergy/node_id is the default,
 # but never commit a persisted node id if one lands in-tree)
@@ -10,3 +11,8 @@ __pycache__/
 
 # OS / editor cruft
 .DS_Store
+
+# Secrets — real CockroachDB DSNs, AWS creds, etc. Never commit.
+.env
+.env.*
+!.env.example
