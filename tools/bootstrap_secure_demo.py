@@ -40,6 +40,11 @@ def main() -> None:
                 grant_node_capability(cur, executor_node_id="demo-seeder",
                                       node_id=f"agent-{i}", capability="RECALL_GLOBAL",
                                       reason="secure demo roaming grant")
+            # The local resolver also stands in for the cron sweeper
+            # (expire_signals), which requires the global MAINTAIN capability.
+            grant_node_capability(cur, executor_node_id="demo-seeder",
+                                  node_id="demo-local-resolver", capability="MAINTAIN",
+                                  reason="secure demo sweeper grant")
         run_in_transaction(conn, bootstrap)
     finally:
         conn.close()

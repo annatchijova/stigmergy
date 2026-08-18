@@ -45,6 +45,7 @@ import random
 import threading
 import time
 from collections import Counter
+from datetime import timedelta
 from fractions import Fraction
 
 from audit.bundle import export_bundle, verify_bundle
@@ -53,13 +54,22 @@ from audit.merkle import create_snapshot, verify_ledger
 from ops.controller import observe, resonance_density
 from ops.memories import recall, reinforce, store, verify_provider
 from ops.recruitment import (
-    CooldownActive, MemoryOrphaned, RegionUnavailable, emit_signal, resolve_recruitment,
+    CooldownActive, MemoryOrphaned, RegionUnavailable, emit_signal, expire_signals,
+    resolve_recruitment,
 )
 from ops.regions import RegionExists, create_region
 
 from .corpus import MISPLACED, QUERIES, THEMES, all_regions, region_id_for, seed_items
 
 SEED_NODE = "demo-seeder"
+
+# Demo-scaled signal TTL, announced in the report like the console's compressed
+# cooldown. Production TTL is 30 min; here a weak early-field signal must be able
+# to expire within a run that lasts seconds, so the sweeper can clear it and a
+# stronger re-recruitment can land. The anti-flood keeps one PENDING signal per
+# (memory, origin_region), so without a short TTL AND a running sweep the first
+# weak vote blocks every later strong one and nothing ever reaches quorum.
+DEMO_SIGNAL_TTL = timedelta(seconds=6)
 
 
 def make_provider(name: str):
@@ -119,6 +129,24 @@ def agent_round(cur, *, agent_id: str, node_id: str, provider, theme: str, query
     row = cur.fetchone()
     mode, region = (row[0], row[1]) if row else ("ROAMING", None)
 
+    # WORKLOAD, never a decision (see this module's docstring; the browser
+    # console does the same 50/50). Half the rounds ask "more like this",
+    # seeded from a memory the field already holds: a memory asked about itself
+    # answers with its resonant neighbourhood, and if that neighbourhood lives
+    # in another region the agent has observed a misplaced memory without being
+    # told. A themed-query-only workload rarely surfaces the outliers, so the
+    # density gradient never speaks and nothing migrates.
+    if random.random() < 0.5:
+        scope = region if mode == "DWELLING" else None
+        if scope is not None:
+            cur.execute("SELECT content FROM memories WHERE region_id = %s "
+                        "ORDER BY random() LIMIT 1", (scope,))
+        else:
+            cur.execute("SELECT content FROM memories ORDER BY random() LIMIT 1")
+        seed = cur.fetchone()
+        if seed is not None:
+            query = seed[0]
+
     rr = recall(cur, provider=provider, node_id=node_id,
                 query_text=query,
                 region_id=region if mode == "DWELLING" else None,
@@ -162,7 +190,7 @@ def agent_round(cur, *, agent_id: str, node_id: str, provider, theme: str, query
                     origin_region=majority_region,
                     memory_id=top.memory_id,
                     reason="HIGH_RESONANCE",
-                    vigor=density)
+                    vigor=density, ttl=DEMO_SIGNAL_TTL)
         stats["signals_emitted"] += 1
 
 
@@ -192,13 +220,22 @@ def agent_loop(idx: int, dsn: str, node_id: str, provider, rounds: int, stats: C
 
 def resolver_loop(dsn: str, stop: threading.Event, stats: Counter,
                   lock: threading.Lock) -> None:
-    """DEMO-ONLY stand-in for the changefeed Lambda. It polls — the real
-    system reacts (lambdas/changefeed_resolver.py). Labeled accordingly."""
+    """DEMO-ONLY stand-in for BOTH deployed reactors: the changefeed resolver
+    Lambda (it polls; the real system reacts — lambdas/changefeed_resolver.py)
+    AND the cron sweeper Lambda (lambdas/cron_sweeper.py). Each cycle it first
+    expires signals past their TTL, then resolves the live PENDING ones. Running
+    the sweep is not optional here: the anti-flood keeps one PENDING signal per
+    (memory, origin_region), so a weak early vote must be swept before a stronger
+    re-recruitment can land. Labeled accordingly."""
     conn = connect(dsn)
     node_id = "demo-local-resolver"
     local = Counter()
     try:
         while not stop.is_set():
+            # Sweeper half: expire signals past their (demo-scaled) TTL so the
+            # anti-flood frees a memory for a stronger re-recruitment.
+            local["signals_expired"] += run_in_transaction(
+                conn, lambda cur: expire_signals(cur, node_id=node_id))
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -224,7 +261,7 @@ def resolver_loop(dsn: str, stop: threading.Event, stats: Counter,
                 except (CooldownActive, RegionUnavailable,
                         LookupError, ValueError, MemoryOrphaned):
                     local["resolutions_deferred"] += 1
-            stop.wait(1.0)
+            stop.wait(0.25)
     finally:
         conn.close()
         with lock:
@@ -350,6 +387,10 @@ def main() -> None:
 
     resolver = None
     if args.local_resolver:
+        print(f"[demo] local resolver + sweeper stand-in: signal TTL scaled to "
+              f"{DEMO_SIGNAL_TTL.total_seconds():.0f}s (production 30 min), swept "
+              f"each cycle — the deployed system uses the changefeed resolver and "
+              f"the cron sweeper Lambdas.")
         resolver = threading.Thread(
             target=resolver_loop, args=(resolver_dsn, stop, stats, lock),
             daemon=True)

@@ -51,7 +51,7 @@ cockroach sql --insecure --host="127.0.0.1:$port" --database=stigmergy --execute
 for i in $(seq 0 $((agents-1))); do cockroach sql --insecure --host="127.0.0.1:$port" --database=stigmergy --execute="INSERT INTO agent_nodes (node_id,db_principal) VALUES ('agent-$i','demo_agent_$i');" >/dev/null; done
 seed_dsn="postgresql://demo_seeder@127.0.0.1:$port/stigmergy?sslmode=disable"; resolver_dsn="postgresql://demo_resolver@127.0.0.1:$port/stigmergy?sslmode=disable"
 PYTHONPATH="$repo_dir" python3 tools/bootstrap_secure_demo.py --dsn "$seed_dsn" --agents "$agents"
-cmd=(python3 -m demo.run_demo --dsn "$seed_dsn" --seed-dsn "$seed_dsn" --resolver-dsn "$resolver_dsn" --agents "$agents" --rounds "${STIGMERGY_DEMO_ROUNDS:-5}" --provider "$provider" --local-resolver --bundle "$bundle")
+cmd=(python3 -m demo.run_demo --dsn "$seed_dsn" --seed-dsn "$seed_dsn" --resolver-dsn "$resolver_dsn" --agents "$agents" --rounds "${STIGMERGY_DEMO_ROUNDS:-250}" --provider "$provider" --local-resolver --bundle "$bundle")
 for i in $(seq 0 $((agents-1))); do cmd+=(--agent-dsn "postgresql://demo_agent_$i@127.0.0.1:$port/stigmergy?sslmode=disable"); done
 PYTHONPATH="$repo_dir" "${cmd[@]}"
 
