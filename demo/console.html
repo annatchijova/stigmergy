@@ -396,19 +396,18 @@ body.mode-bundle .transport .tickread{opacity:.65}
 <div class="disclosure">
   <span class="tagmark">in-browser</span>
   <div>
-    <span class="en"><b>This runs the arithmetic, not the cluster.</b> Every decision below — reinforcement,
-    hysteresis, consensus, cooldown — is the same exact-rational math the Python modules use, reimplemented
-    here in BigInt, plus real SHA-256 hash chains you can try to forge. It is <b>not</b> connected to
-    CockroachDB, and the five-minute migration cooldown is compressed to eight seconds so a demo fits in a
-    minute. The cluster run is <span class="num">python -m demo.run_demo</span> — or press
-    <b>Replay the real run</b> above to load one that already happened.</span>
-    <span class="es"><b>Esto ejecuta la aritmética, no el clúster.</b> Cada decisión de abajo — refuerzo,
-    histéresis, consenso, cooldown — es la misma matemática racional exacta de los módulos Python,
-    reimplementada acá en BigInt, más cadenas de hash SHA-256 reales que podés intentar falsificar.
-    <b>No</b> está conectado a CockroachDB, y el cooldown de migración de cinco minutos está comprimido a
-    ocho segundos para que la demo entre en un minuto. La corrida contra el clúster es
-    <span class="num">python -m demo.run_demo</span> — o apretá
-    <b>Reproducir la corrida real</b> arriba para cargar una que ya ocurrió.</span>
+    <span class="en"><b>The full system runs against real CockroachDB</b> — that is
+    <span class="num">python -m demo.run_demo</span>, and the sealed cluster run you can <b>Replay</b> above.
+    <b>This page is its in-browser twin:</b> the same exact-rational decisions below — reinforcement,
+    hysteresis, consensus, cooldown — in BigInt, with real SHA-256 hash chains you can try to forge, running
+    locally so anyone can open it and check the arithmetic with no database. The five-minute migration
+    cooldown is compressed to eight seconds so it fits in a minute.</span>
+    <span class="es"><b>El sistema completo corre contra CockroachDB real</b> — eso es
+    <span class="num">python -m demo.run_demo</span>, y la corrida sellada que podés <b>Reproducir</b> arriba.
+    <b>Esta página es su gemela en el navegador:</b> las mismas decisiones racionales exactas de abajo —
+    refuerzo, histéresis, consenso, cooldown — en BigInt, con cadenas SHA-256 reales que podés intentar
+    falsificar, corriendo local para que cualquiera la abra y verifique la aritmética sin base de datos. El
+    cooldown de migración de cinco minutos está comprimido a ocho segundos para que entre en un minuto.</span>
   </div>
 </div>
 
