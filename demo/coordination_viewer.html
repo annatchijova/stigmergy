@@ -304,7 +304,7 @@ const DUR = d => MOTION ? d : Math.min(d, 60);
 /* ---------------- i18n ---------------- */
 const LANGS = {
 en: {
-  simchip: "in-browser simulation · not a live cluster",
+  simchip: "in-browser twin of python -m demo.run_demo",
   titletag: "Three agents. No coordinator. The database is the only channel.",
   runround: n => "RUN ROUND " + n,
   running: "ROUND " + "…",
@@ -314,7 +314,7 @@ en: {
   endbig: "CONVERGENCE WITHOUT A COORDINATOR",
   endtag: "No agent instructed another. Every step above is a read or a write — replay the ledger, verify the chains.",
   endscore: (n,t,r) => `${n}/${t} misplaced memories home · ${r} rounds`,
-  dfoot: "in-browser simulation of demo/run_demo.py · same constants, exact-fraction decisions · stand-in embeddings (not MiniLM) · cooldown 5 min → 24 s scaled · display hashes (real system: canonical JSON + SHA-256)",
+  dfoot: "in-browser twin of demo/run_demo.py · same constants, exact-fraction decisions · stand-in embeddings (not MiniLM) · cooldown 5 min → 24 s scaled · display hashes (real system: canonical JSON + SHA-256)",
   tabs: {ledger:"Ledger", signals:"Signals", chains:"Chains", verify:"Verify", inspect:"Inspect"},
   cap: {
     seeded: ["A field grows: 3 regions, 30 memories — 6 deliberately misplaced.",
@@ -342,7 +342,7 @@ en: {
   reasonQuery: t => `top recall hit for a ${t} query`,
 },
 es: {
-  simchip: "simulación en navegador · no es un clúster real",
+  simchip: "gemela en navegador de python -m demo.run_demo",
   titletag: "Tres agentes. Sin coordinador. La base de datos es el único canal.",
   runround: n => "RONDA " + n,
   running: "RONDA…",
@@ -352,7 +352,7 @@ es: {
   endbig: "CONVERGENCIA SIN COORDINADOR",
   endtag: "Ningún agente dio órdenes a otro. Cada paso fue una lectura o una escritura — reproduce el ledger, verifica las cadenas.",
   endscore: (n,t,r) => `${n}/${t} memorias mal ubicadas volvieron a casa · ${r} rondas`,
-  dfoot: "simulación en navegador de demo/run_demo.py · mismas constantes, decisiones en fracciones exactas · embeddings sustitutos (no MiniLM) · cooldown 5 min → 24 s escalado · hashes de exhibición (sistema real: JSON canónico + SHA-256)",
+  dfoot: "gemela en navegador de demo/run_demo.py · mismas constantes, decisiones en fracciones exactas · embeddings sustitutos (no MiniLM) · cooldown 5 min → 24 s escalado · hashes de exhibición (sistema real: JSON canónico + SHA-256)",
   tabs: {ledger:"Ledger", signals:"Señales", chains:"Cadenas", verify:"Verificar", inspect:"Inspección"},
   cap: {
     seeded: ["Un campo crece: 3 regiones, 30 memorias — 6 mal ubicadas a propósito.",
