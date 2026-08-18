@@ -14,6 +14,27 @@ hackathon. Apache 2.0.
 runnable field console (with one-click replay of a real sealed run), and the
 coordination and custody viewers.
 
+## Hackathon components (CockroachDB × AWS)
+
+**CockroachDB — two required components:**
+
+- **Distributed Vector Indexing.** `memories.embedding VECTOR(384)` with a
+  `VECTOR INDEX (region_id, embedding)` (`schema.sql`), applied to the live
+  CockroachDB Cloud cluster; `recall()` runs a region-scoped `<->` vector search
+  over the pinned `all-MiniLM-L6-v2` embeddings.
+- **ccloud CLI (Agent-Ready).** The `combat-mummy` cluster is inspected and
+  managed with `ccloud` — `ccloud cluster list`, `ccloud cluster info`,
+  `ccloud cluster user`, `ccloud cluster sql` — the agent-ready surface for
+  cluster and SQL-principal management.
+
+**AWS.** The resolver and sweeper are deployed as **AWS Lambda** functions
+(`infra/template.json`): a public resolver Function URL gated by the changefeed
+token, and an **EventBridge**-scheduled sweeper, each with its own **IAM** role
+and **Secrets Manager** DSN, connecting to the CockroachDB Cloud cluster (itself
+on AWS, `us-east-1`). Both identity smoke-tests pass (resolver heartbeat 200,
+sweeper tick 200). A GCP Cloud Run deployment (`gcp/`) mirrors the same identity
+contract on a second substrate.
+
 ## Why this exists
 
 Most multi-agent systems coordinate through orchestration: a controller
