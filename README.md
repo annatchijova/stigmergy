@@ -35,6 +35,80 @@ on AWS, `us-east-1`). Both identity smoke-tests pass (resolver heartbeat 200,
 sweeper tick 200). A GCP Cloud Run deployment (`gcp/`) mirrors the same identity
 contract on a second substrate.
 
+## Visual walkthrough
+
+**Architecture** — N agents, CockroachDB Cloud on AWS, and the AWS Lambda reactors that keep the field converging:
+
+![STIGMERGY architecture](visual/deck/4.png)
+
+**The story, in slides:**
+
+<p align="center">
+  <img src="visual/deck/1.png" width="49%"> <img src="visual/deck/2.png" width="49%">
+  <img src="visual/deck/3.png" width="49%"> <img src="visual/deck/5.png" width="49%">
+  <img src="visual/deck/6.png" width="49%"> <img src="visual/deck/7.png" width="49%">
+</p>
+
+**A real run** — the terminal seeds a real cluster, the field converges, every chain verifies, and a sealed bundle passes B1-B6:
+
+<p align="center">
+  <img src="visual/fotos/terminal-run-1.png" width="49%"> <img src="visual/fotos/terminal-run-2.png" width="49%">
+</p>
+
+**The system, live** — the field console, the coordination and custody viewers, tamper-and-verify, and the field sorting itself out:
+
+<details>
+<summary><b>Full screenshot gallery (43 shots)</b></summary>
+
+<p align="center">
+  <img src="visual/fotos/run-01.png" width="24%">
+  <img src="visual/fotos/run-02.png" width="24%">
+  <img src="visual/fotos/run-03.png" width="24%">
+  <img src="visual/fotos/run-04.png" width="24%">
+  <img src="visual/fotos/run-05.png" width="24%">
+  <img src="visual/fotos/run-06.png" width="24%">
+  <img src="visual/fotos/run-07.png" width="24%">
+  <img src="visual/fotos/run-08.png" width="24%">
+  <img src="visual/fotos/run-09.png" width="24%">
+  <img src="visual/fotos/run-10.png" width="24%">
+  <img src="visual/fotos/run-11.png" width="24%">
+  <img src="visual/fotos/run-12.png" width="24%">
+  <img src="visual/fotos/run-13.png" width="24%">
+  <img src="visual/fotos/run-14.png" width="24%">
+  <img src="visual/fotos/run-15.png" width="24%">
+  <img src="visual/fotos/run-16.png" width="24%">
+  <img src="visual/fotos/run-17.png" width="24%">
+  <img src="visual/fotos/run-18.png" width="24%">
+  <img src="visual/fotos/run-19.png" width="24%">
+  <img src="visual/fotos/run-20.png" width="24%">
+  <img src="visual/fotos/run-21.png" width="24%">
+  <img src="visual/fotos/run-22.png" width="24%">
+  <img src="visual/fotos/run-23.png" width="24%">
+  <img src="visual/fotos/run-24.png" width="24%">
+  <img src="visual/fotos/run-25.png" width="24%">
+  <img src="visual/fotos/run-26.png" width="24%">
+  <img src="visual/fotos/run-27.png" width="24%">
+  <img src="visual/fotos/run-28.png" width="24%">
+  <img src="visual/fotos/run-29.png" width="24%">
+  <img src="visual/fotos/run-30.png" width="24%">
+  <img src="visual/fotos/run-31.png" width="24%">
+  <img src="visual/fotos/run-32.png" width="24%">
+  <img src="visual/fotos/run-33.png" width="24%">
+  <img src="visual/fotos/run-34.png" width="24%">
+  <img src="visual/fotos/run-35.png" width="24%">
+  <img src="visual/fotos/run-36.png" width="24%">
+  <img src="visual/fotos/run-37.png" width="24%">
+  <img src="visual/fotos/run-38.png" width="24%">
+  <img src="visual/fotos/run-39.png" width="24%">
+  <img src="visual/fotos/run-40.png" width="24%">
+  <img src="visual/fotos/run-41.png" width="24%">
+  <img src="visual/fotos/run-42.png" width="24%">
+  <img src="visual/fotos/run-43.png" width="24%">
+</p>
+
+</details>
+
+
 ## Why this exists
 
 Most multi-agent systems coordinate through orchestration: a controller
